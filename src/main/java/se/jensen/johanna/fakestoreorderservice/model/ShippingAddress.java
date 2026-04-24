@@ -22,7 +22,7 @@ public class ShippingAddress {
   private String streetName;
 
 
-  private String streetName_2;
+  private String streetName2;
 
   @Pattern(regexp = "\\d{5}")
   private String postalCode;
@@ -38,7 +38,7 @@ public class ShippingAddress {
         .lastName(lastName)
         .co(co)
         .streetName(streetName)
-        .streetName_2(streetName2)
+        .streetName2(streetName2)
         .postalCode(postalCode)
         .city(city)
         .country(country)

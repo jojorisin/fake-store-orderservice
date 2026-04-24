@@ -1,0 +1,1 @@
+ALTER TABLE orders RENAME COLUMN street_name_2 TO street_name2;
