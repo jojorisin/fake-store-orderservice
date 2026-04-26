@@ -18,6 +18,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
@@ -25,6 +26,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Table(name = "orders")
 @Builder
+@Getter
 public class Order {
 
   @Id
@@ -49,6 +51,8 @@ public class Order {
   @Enumerated(EnumType.STRING)
   private OrderStatus orderStatus;
 
+  private String stripeSessionId;
+
   @NotNull
   private Instant createdAt;
   @NotNull
@@ -72,6 +76,10 @@ public class Order {
   private static BigDecimal calculateOrderSum(List<OrderItem> orderItems) {
     return orderItems.stream().map(OrderItem::calculateTotalPrice)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  public void assignStripeSession(String stripeSessionId) {
+    this.stripeSessionId = stripeSessionId;
   }
 
 }
