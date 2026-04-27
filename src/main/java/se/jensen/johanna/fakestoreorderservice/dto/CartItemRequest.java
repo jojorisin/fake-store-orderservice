@@ -2,12 +2,9 @@ package se.jensen.johanna.fakestoreorderservice.dto;
 
 import java.util.UUID;
 
-public record ProductDTO(
+public record CartItemRequest(
     UUID productId,
-    String title,
-    Integer price,
-    String description,
-    String image
+    Integer quantity
 ) {
 
 }

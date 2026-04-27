@@ -49,4 +49,8 @@ public class OrderItem {
     return this.pricePerItem.multiply(BigDecimal.valueOf(this.quantity));
   }
 
+  public void giveParent(Order order) {
+    this.order = order;
+  }
+
 }

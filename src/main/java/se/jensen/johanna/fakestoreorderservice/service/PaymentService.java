@@ -1,8 +1,10 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
+import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
+import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +33,12 @@ public class PaymentService {
   @Value("${stripe.webhook-secret}")
   private String webhookSecret;
 
+  @PostConstruct
+  public void init() {
+    Stripe.apiKey = stripeApiKey;
+    log.info("Loaded webhook secret: {}", webhookSecret);
+  }
+
   @Transactional
   public CheckoutResponse createCheckoutSession(Order order, String email) {
     List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems());
@@ -50,6 +58,7 @@ public class PaymentService {
       return new CheckoutResponse(session.getUrl(), session.getId());
 
     } catch (StripeException e) {
+      log.error("Error creating checkout session {}, {}", e, e.getMessage());
       throw new PaymentException("Error creating checkout session");
     }
 

@@ -40,6 +40,8 @@ public class Order {
   @NotNull
   private List<OrderItem> orderItems;
 
+  private UUID reservationId;
+
   @NotNull
   @Embedded
   private ShippingAddress shippingAddress;
@@ -55,7 +57,7 @@ public class Order {
 
   @NotNull
   private Instant createdAt;
-  @NotNull
+
   private Instant updatedAt;
 
   @PreUpdate
@@ -63,13 +65,21 @@ public class Order {
     this.updatedAt = Instant.now();
   }
 
-  public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address) {
-    return Order.builder()
+  public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address,
+      UUID reservationId) {
+    Order order = Order.builder()
         .buyerId(buyerId)
         .orderItems(orderItems)
         .shippingAddress(address)
+        .reservationId(reservationId)
         .orderSum(calculateOrderSum(orderItems))
+        .createdAt(Instant.now())
+        .updatedAt(Instant.now())
         .orderStatus(OrderStatus.PENDING).build();
+
+    order.orderItems.forEach(item -> item.giveParent(order));
+
+    return order;
 
   }
 
