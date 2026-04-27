@@ -71,6 +71,11 @@ public class OrderService {
     ReservationResponse reservationResponse = restTemplate.postForObject(
         productServiceUrl + "/reservations/reserve-cart", entity, ReservationResponse.class
     );
+    //Don't do this 
+    if (reservationResponse == null) {
+      log.error("Reservation failed");
+      throw new RuntimeException("Reservation failed");
+    }
     return reservationResponse.reservationID();
   }
 

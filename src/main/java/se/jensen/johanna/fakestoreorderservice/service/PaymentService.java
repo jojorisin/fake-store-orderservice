@@ -43,8 +43,6 @@ public class PaymentService {
   public CheckoutResponse createCheckoutSession(Order order, String email) {
     List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems());
 
-    long amountInCents = order.getOrderSum().multiply(BigDecimal.valueOf(100)).longValue();
-
     try {
       SessionCreateParams params = SessionCreateParams.builder()
           .setMode(SessionCreateParams.Mode.PAYMENT).setCustomerEmail(email)
