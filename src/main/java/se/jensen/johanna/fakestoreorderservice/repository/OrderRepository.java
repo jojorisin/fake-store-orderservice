@@ -1,4 +1,4 @@
-package se.jensen.johanna.fakestoreorderservice;
+package se.jensen.johanna.fakestoreorderservice.repository;
 
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -5,7 +5,7 @@ import java.util.Set;
 
 public record OrderRequest(
     @NotNull
-    Set<OrderItemRequest> orderItemRequests,
+    Set<CartItemRequest> itemRequests,
     @NotNull
     AddressRequest addressRequest
 ) {
