@@ -12,12 +12,16 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Table(name = "order_items")
+@Getter
+@Builder
 public class OrderItem {
 
   @Id
@@ -31,14 +35,22 @@ public class OrderItem {
   private String title;
 
   @NotNull
-  private Integer quantity;
+  private BigDecimal pricePerItem;
 
   @NotNull
-  private BigDecimal pricePerItem;
+  private Integer quantity;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "order_id")
   @NotNull
   private Order order;
+
+  public BigDecimal calculateTotalPrice() {
+    return this.pricePerItem.multiply(BigDecimal.valueOf(this.quantity));
+  }
+
+  public void giveParent(Order order) {
+    this.order = order;
+  }
 
 }
