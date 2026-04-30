@@ -12,8 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import se.jensen.johanna.fakestoreorderservice.controller.PaymentException;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
+import se.jensen.johanna.fakestoreorderservice.exception.PaymentException;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 
@@ -56,8 +56,9 @@ public class PaymentService {
       return new CheckoutResponse(session.getUrl(), session.getId());
 
     } catch (StripeException e) {
-      log.error("Error creating checkout session {}, {}", e, e.getMessage());
-      throw new PaymentException("Error creating checkout session");
+      log.error("Error creating checkout session for order {} {}, {}", order.getOrderId(), e,
+          e.getMessage());
+      throw new PaymentException("Unable to process payment.");
     }
 
   }
@@ -73,6 +74,10 @@ public class PaymentService {
                       .setName(item.getTitle()).build()).build()).build();
       lineItems.add(lineItem);
 
+    }
+    if (lineItems.isEmpty()) {
+      log.error("Error creating checkout session. No line items found.");
+      throw new PaymentException("Unable to process payment.");
     }
     return lineItems;
   }
