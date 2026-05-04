@@ -72,10 +72,10 @@ public class OrderService {
           productServiceUrl + "/reservations/reserve-cart");
       throw new DomainStateException("Unable to process order.");
     }
-    return reservationResponse.reservationID();
+    return reservationResponse.reservationId();
   }
 
-  //
+
   public List<OrderItem> getOrderItems(Set<CartItemRequest> itemRequests) {
     List<OrderItem> orderItems = new ArrayList<>();
     for (CartItemRequest item : itemRequests) {
@@ -91,5 +91,36 @@ public class OrderService {
     return orderItems;
   }
 
+  @Transactional
+  public void confirmPaidOrder(String sessionId) {
+    if (sessionId == null) {
+      throw new DomainStateException("Unable to process order.");
+    }
 
+    Order order = orderRepository.findByStripeSessionId(sessionId).orElseThrow(() -> {
+      log.error("Order for stripe session id: {} not found", sessionId);
+      return new DomainStateException("Unable to process order.");
+    });
+
+    order.confirmPaidOrder();
+    orderRepository.save(order);
+    commitReservation(order.getReservationId());
+
+  }
+
+
+  public void commitReservation(UUID reservationId) {
+    log.info("Committing reservation {}", reservationId);
+    try {
+      restTemplate.postForObject(
+          productServiceUrl + "/reservations/" + reservationId + "/commit-reservation", null,
+          Void.class);
+    } catch (Exception e) {
+      log.error("Unable to commit reservation {}", reservationId, e);
+      throw new DomainStateException("Unable to process order.");
+    }
+  }
 }
+
+
+
