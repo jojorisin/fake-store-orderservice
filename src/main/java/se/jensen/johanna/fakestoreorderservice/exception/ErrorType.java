@@ -7,7 +7,8 @@ import org.springframework.http.HttpStatus;
 public enum ErrorType {
   TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED),
   ILLEGAL_STATE(HttpStatus.INTERNAL_SERVER_ERROR),
-  PAYMENT_ERROR(HttpStatus.PAYMENT_REQUIRED);
+  PAYMENT_ERROR(HttpStatus.PAYMENT_REQUIRED),
+  NOT_FOUND(HttpStatus.NOT_FOUND);
 
   private final HttpStatus status;
 

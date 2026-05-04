@@ -92,4 +92,8 @@ public class Order {
     this.stripeSessionId = stripeSessionId;
   }
 
+  public void confirmPaidOrder() {
+    this.orderStatus = OrderStatus.PAID;
+  }
+
 }

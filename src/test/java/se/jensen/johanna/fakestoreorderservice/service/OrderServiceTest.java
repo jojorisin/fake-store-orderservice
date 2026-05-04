@@ -94,7 +94,6 @@ class OrderServiceTest {
     ReservationResponse resResponse = new ReservationResponse(UUID.randomUUID());
     ProductDTO productDto = new ProductDTO(UUID.randomUUID(), "Titel", 100, "d", "s");
 
-    // Skapa ett riktigt OrderItem (viktigt för calculateOrderSum)
     OrderItem realItem = OrderItem.builder()
         .pricePerItem(new BigDecimal("100.00"))
         .quantity(2)
