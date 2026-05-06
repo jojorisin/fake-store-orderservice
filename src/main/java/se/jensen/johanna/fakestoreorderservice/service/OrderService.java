@@ -35,6 +35,9 @@ public class OrderService {
   @Value("${product-service-url}")
   private String productServiceUrl;
 
+  @Value("${inventory-service-url}")
+  private String inventoryServiceUrl;
+
   private final OrderRepository orderRepository;
   private final OrderItemMapper orderItemMapper;
   private final AddressMapper addressMapper;
@@ -64,12 +67,12 @@ public class OrderService {
     HttpEntity<ReservationRequest> entity = new HttpEntity<>(new ReservationRequest(itemRequests),
         headers);
     ReservationResponse reservationResponse = restTemplate.postForObject(
-        productServiceUrl + "/reservations/reserve-cart", entity, ReservationResponse.class
+        inventoryServiceUrl + "/reservations/reserve-cart", entity, ReservationResponse.class
     );
     //Don't do this 
     if (reservationResponse == null) {
       log.error("Unable to reserve order items from {}",
-          productServiceUrl + "/reservations/reserve-cart");
+          inventoryServiceUrl + "/reservations/reserve-cart");
       throw new DomainStateException("Unable to process order.");
     }
     return reservationResponse.reservationId();
@@ -113,7 +116,7 @@ public class OrderService {
     log.info("Committing reservation {}", reservationId);
     try {
       restTemplate.postForObject(
-          productServiceUrl + "/reservations/" + reservationId + "/commit-reservation", null,
+          inventoryServiceUrl + "/reservations/" + reservationId + "/reduce-stock", null,
           Void.class);
     } catch (Exception e) {
       log.error("Unable to commit reservation {}", reservationId, e);
