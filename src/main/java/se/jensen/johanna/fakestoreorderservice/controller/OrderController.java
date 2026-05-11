@@ -25,7 +25,7 @@ public class OrderController {
   private final OrderService orderService;
   private final WebhookService webhookService;
 
-  @PostMapping
+  @PostMapping("/order")
   public ResponseEntity<CheckoutResponse> order(@AuthenticationPrincipal Jwt jwt,
       @RequestBody @Valid OrderRequest orderRequest) {
 

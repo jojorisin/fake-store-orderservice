@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -55,10 +56,15 @@ public class Order {
 
   private String stripeSessionId;
 
-  @NotNull
+
   private Instant createdAt;
 
   private Instant updatedAt;
+
+  @PrePersist
+  private void onCreate() {
+    this.createdAt = Instant.now();
+  }
 
   @PreUpdate
   private void onUpdate() {

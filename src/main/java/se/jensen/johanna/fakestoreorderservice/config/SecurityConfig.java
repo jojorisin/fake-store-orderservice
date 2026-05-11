@@ -22,7 +22,7 @@ public class SecurityConfig {
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/actuator/health", "/api/orders").permitAll()
+            .requestMatchers("/actuator/health").permitAll()
             .requestMatchers("/api/orders/webhook").permitAll()
             .anyRequest().authenticated())
         .oauth2ResourceServer(oauth -> oauth
