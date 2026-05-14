@@ -19,6 +19,7 @@ import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationResponse;
+import se.jensen.johanna.fakestoreorderservice.dto.StripeEventDTO;
 import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
@@ -122,6 +123,23 @@ public class OrderService {
       log.error("Unable to commit reservation {}", reservationId, e);
       throw new DomainStateException("Unable to process order.");
     }
+  }
+
+  @Transactional
+  public void handlePaidOrder(StripeEventDTO stripeEvent) {
+    log.info("Handling paid order: {} stripe session: {}",
+        stripeEvent.detail().data().stripeObject().metadata().orderId(),
+        stripeEvent.detail().data().stripeObject().sessionId());
+    Order order = orderRepository.findByStripeSessionId(
+        stripeEvent.detail().data().stripeObject().sessionId()).orElseThrow(() -> {
+      log.error("Order for stripe session id: {} not found",
+          stripeEvent.detail().data().stripeObject().sessionId());
+      return new DomainStateException("Unable to process order.");
+    });
+    order.confirmPaidOrder();
+    orderRepository.save(order);
+    log.info("Order {} confirmed paid", order.getOrderId());
+
   }
 }
 
