@@ -132,7 +132,7 @@ public class OrderService {
   }
 
   /**
-   * Triggered by SQS listener. Marks order as PAID and publishes event to confirm reservation in
+   * Triggered by StripeListener. Marks order as PAID and publishes event to confirm reservation in
    * inventory.
    */
   @Transactional
