@@ -3,12 +3,14 @@ package se.jensen.johanna.fakestoreorderservice.messaging;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import se.jensen.johanna.fakestoreorderservice.dto.StripeEventDTO;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
 import se.jensen.johanna.fakestoreorderservice.service.OrderService;
 
 @Slf4j
+@Profile("!local")
 @Component
 @RequiredArgsConstructor
 public class StripeListener {
