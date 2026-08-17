@@ -24,6 +24,7 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/actuator/health").permitAll()
+            .requestMatchers("/api/local/confirm-payment/**").permitAll()
             .requestMatchers("/actuator/**").hasAuthority("SCOPE_ROLE_ADMIN")
             .requestMatchers("/api/orders/order").hasAuthority("SCOPE_ROLE_USER")
             .anyRequest().authenticated())
