@@ -132,8 +132,8 @@ public class OrderService {
   }
 
   /**
-   * Triggered by StripeListener. Marks order as PAID and publishes event to confirm reservation in
-   * inventory.
+   * Triggered by Stripe paid events. Marks order as PAID and publishes event to confirm reservation
+   * in inventory.
    */
   @Transactional
   public void handlePaidOrder(StripeEventDTO stripeEvent) {
