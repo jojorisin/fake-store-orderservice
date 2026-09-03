@@ -12,7 +12,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
@@ -90,9 +90,9 @@ public class OrderService {
       restTemplate.postForEntity(
           inventoryServiceUrl + "/reservations/reserve-cart", entity, Void.class
       );
-    } catch (HttpStatusCodeException e) {
+    } catch (RestClientException e) {
       log.error("Unable to reserve order items from {}. status: {}", inventoryServiceUrl,
-          e.getStatusCode());
+          e.getMessage());
       throw new DomainStateException("Unable to process order.");
     }
 

@@ -1,6 +1,7 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -24,6 +25,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
@@ -31,6 +33,8 @@ import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
+import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
+import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
@@ -110,5 +114,27 @@ class OrderServiceTest {
     verify(orderRepository, times(1)).save(any(Order.class));
   }
 
+  @Test
+  void reserveOrderItems_ShouldSuccessfullyReserveOrderItems() {
+    // creating a request to use. values are not important
+    ReservationRequest reservationRequest = new ReservationRequest(
+        Set.of(new CartItemRequest(UUID.randomUUID(), 2)), UUID.randomUUID());
+    orderService.reserveOrderItems(reservationRequest);
+    //i want to verify i send the request one time
+    verify(restTemplate, times(1)).postForEntity(anyString(), any(HttpEntity.class),
+        eq(Void.class));
+  }
+
+  @Test
+  void reserveOrderItems_ShouldThrowDomainStateExceptionWhenUnableToReserve() {
+    ReservationRequest reservationRequest = new ReservationRequest(
+        Set.of(new CartItemRequest(UUID.randomUUID(), 2)), UUID.randomUUID());
+    when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class))).thenThrow(
+        new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
+
+    assertThrows(DomainStateException.class,
+        () -> orderService.reserveOrderItems(reservationRequest));
+
+  }
 
 }
