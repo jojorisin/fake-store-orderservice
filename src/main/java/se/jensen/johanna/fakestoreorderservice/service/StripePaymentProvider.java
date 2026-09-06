@@ -10,16 +10,17 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.exception.CheckoutException;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentType;
 
-@Service
+@Component
 @Slf4j
-public class PaymentService {
+public class StripePaymentProvider implements PaymentProvider {
 
   @Value("${stripe.api-key}")
   private String stripeApiKey;
@@ -36,6 +37,17 @@ public class PaymentService {
     log.info("Stripe API initialized for creating checkout sessions.");
   }
 
+  @Override
+  public boolean supports(PaymentType paymentMethod) {
+    return paymentMethod == PaymentType.STRIPE;
+  }
+
+  @Override
+  public PaymentType getPaymentType() {
+    return PaymentType.STRIPE;
+  }
+
+  @Override
   @Transactional
   public CheckoutResponse createCheckoutSession(Order order, String email) {
     List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems());
@@ -48,7 +60,7 @@ public class PaymentService {
           .addAllLineItem(lineItems)
           .putMetadata("orderId", order.getOrderId().toString()).build();
       Session session = Session.create(params);
-      order.assignStripeSession(session.getId());
+      //order.assignStripeSession(session.getId());
 
       return new CheckoutResponse(session.getUrl(), session.getId());
 

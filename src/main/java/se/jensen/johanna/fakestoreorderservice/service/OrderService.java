@@ -1,7 +1,7 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,7 +27,6 @@ import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.messaging.OrderEventPublisher;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
-import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
 
 @Service
@@ -45,34 +44,41 @@ public class OrderService {
   private final OrderItemMapper orderItemMapper;
   private final AddressMapper addressMapper;
   private final RestTemplate restTemplate;
-  private final PaymentService paymentService;
   private final OrderEventPublisher orderEventPublisher;
+  private final PaymentResolver paymentResolver;
 
   /**
-   * Creates an order with status PENDING. Retrieves cart items from product-service and reserves
-   * the cart in inventory. Creates and returns a checkout session for stripe payment
+   * Creates an order with status PENDING. Retrieves cart items from product service then validates
+   * and reserves the cart in inventory. Returns a checkout response from the chosen payment
+   * provider
    *
    * @param jwt     token
    * @param request set containing id of products and quantity
-   * @return CheckoutResponse containing stripe url for payment
+   * @return CheckoutResponse containing checkout url and payment reference
    */
 
   public CheckoutResponse putOrder(Jwt jwt, OrderRequest request) {
     log.info("Creating order for user {}. request {}...", jwt.getSubject(), request);
-
-    UUID buyerId = UUID.fromString(jwt.getSubject());
-    String email = jwt.getClaimAsString("email");
+    PaymentProvider paymentProvider = paymentResolver.resolve(request.paymentType());
     Set<UUID> productIds = request.itemRequests().stream().map(CartItemRequest::productId)
         .collect(Collectors.toSet());
     List<ProductDTO> products = fetchCartProducts(productIds);
-    List<OrderItem> orderItems = mapOrderItems(products, request.itemRequests());
-    ShippingAddress shippingAddress = addressMapper.toShippingAddress(request.addressRequest());
-    Order pendingOrder = Order.create(buyerId, orderItems, shippingAddress);
+    List<OrderItem> orderItems = validateAndMapOrderItems(products, request.itemRequests());
+
+    Order pendingOrder = Order.create(UUID.fromString(jwt.getSubject()), orderItems,
+        addressMapper.toShippingAddress(request.addressRequest()));
     orderRepository.save(pendingOrder);
     log.info("Pending Order {} created. Reserving order items...", pendingOrder.getOrderId());
     reserveOrderItems(new ReservationRequest(request.itemRequests(), pendingOrder.getOrderId()));
+
     log.info("Creating checkout session for order {}...", pendingOrder.getOrderId());
-    return paymentService.createCheckoutSession(pendingOrder, email);
+    CheckoutResponse response = paymentProvider.createCheckoutSession(pendingOrder,
+        jwt.getClaimAsString("email"));
+    pendingOrder.assignPaymentReferences(response.paymentReference(),
+        paymentProvider.getPaymentType());
+    orderRepository.save(pendingOrder);
+
+    return response;
 
   }
 
@@ -98,22 +104,26 @@ public class OrderService {
 
   }
 
-  public List<OrderItem> mapOrderItems(List<ProductDTO> products,
+
+  /**
+   * Validates that the product ids in the request from the client match the response from
+   * product-service then maps them to order items
+   */
+  public List<OrderItem> validateAndMapOrderItems(List<ProductDTO> products,
       Set<CartItemRequest> itemRequests) {
-    log.debug("Mapping order items from cart items {}, matching product ids {}...", itemRequests,
-        products);
-    List<OrderItem> orderItems = new ArrayList<>();
-    for (CartItemRequest item : itemRequests) {
-      ProductDTO productDTO = products.stream()
-          .filter(p -> p.productId().equals(item.productId())).findFirst().orElse(null);
+    Map<UUID, ProductDTO> productMap = products.stream()
+        .collect(Collectors.toMap(ProductDTO::productId, p -> p));
+    return itemRequests.stream().map(item -> {
+      ProductDTO productDTO = productMap.get(item.productId());
       if (productDTO == null) {
-        log.error("Matching Product not found {}", item.productId());
-        throw new DomainStateException("Unable to process order.");
+        log.error("Unable to validate cart item. Client sent invalid product id {}",
+            item.productId());
+        throw new IllegalArgumentException("Unable to process order.");
       }
-      orderItems.add(orderItemMapper.toOrderItem(productDTO, item.quantity()));
-    }
-    return orderItems;
+      return orderItemMapper.toOrderItem(productDTO, item.quantity());
+    }).collect(Collectors.toList());
   }
+
 
   /**
    * Retrieves all products from the cart from productservice
@@ -132,15 +142,15 @@ public class OrderService {
   }
 
   /**
-   * Triggered by Stripe paid events. Marks order as PAID and publishes event to confirm reservation
-   * in inventory.
+   * REMOVE THIS- attempting more general approach Triggered by Stripe paid events. Marks order as
+   * PAID and publishes event to confirm reservation in inventory.
    */
   @Transactional
   public void handlePaidOrder(StripeEventDTO stripeEvent) {
     String stripeSessionId = stripeEvent.detail().data().stripeObject().sessionId();
     log.info("Handling paid order. stripe session: {}",
         stripeSessionId);
-    Order order = orderRepository.findByStripeSessionId(stripeSessionId).orElseThrow(() -> {
+    Order order = orderRepository.findByPaymentReference(stripeSessionId).orElseThrow(() -> {
       log.error("Order for stripe session id: {} not found",
           stripeSessionId);
       return new DomainStateException("Unable to process order.");

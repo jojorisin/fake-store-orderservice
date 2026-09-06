@@ -21,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentType;
 
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -52,7 +53,10 @@ public class Order {
   @Enumerated(EnumType.STRING)
   private OrderStatus orderStatus;
 
-  private String stripeSessionId;
+  private String paymentReference;
+
+  @Enumerated(EnumType.STRING)
+  private PaymentType paymentType;
 
 
   private Instant createdAt;
@@ -90,8 +94,9 @@ public class Order {
         .reduce(BigDecimal.ZERO, BigDecimal::add);
   }
 
-  public void assignStripeSession(String stripeSessionId) {
-    this.stripeSessionId = stripeSessionId;
+  public void assignPaymentReferences(String paymentReference, PaymentType paymentType) {
+    this.paymentReference = paymentReference;
+    this.paymentType = paymentType;
   }
 
   public void confirmPaidOrder() {
