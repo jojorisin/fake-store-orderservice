@@ -11,16 +11,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
+import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
-import se.jensen.johanna.fakestoreorderservice.dto.StripeEventDTO;
 import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
@@ -28,6 +27,8 @@ import se.jensen.johanna.fakestoreorderservice.messaging.OrderEventPublisher;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentEventType;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @Service
 @RequiredArgsConstructor
@@ -116,7 +117,7 @@ public class OrderService {
     return itemRequests.stream().map(item -> {
       ProductDTO productDTO = productMap.get(item.productId());
       if (productDTO == null) {
-        log.error("Unable to validate cart item. Client sent invalid product id {}",
+        log.warn("Unable to validate cart item. Client sent invalid product id {}",
             item.productId());
         throw new IllegalArgumentException("Unable to process order.");
       }
@@ -129,7 +130,7 @@ public class OrderService {
    * Retrieves all products from the cart from productservice
    */
   public List<ProductDTO> fetchCartProducts(Set<UUID> productIds) {
-    log.info("Fetching products from product service for productIds: {}...", productIds);
+    log.debug("Fetching products from product service for productIds: {}...", productIds);
     HttpEntity<Set<UUID>> entity = new HttpEntity<>(productIds);
     ProductBatchResponse response = restTemplate.postForObject(
         productServiceUrl + "/internal/products/batch", entity, ProductBatchResponse.class);
@@ -141,27 +142,37 @@ public class OrderService {
 
   }
 
-  /**
-   * REMOVE THIS- attempting more general approach Triggered by Stripe paid events. Marks order as
-   * PAID and publishes event to confirm reservation in inventory.
-   */
-  @Transactional
-  public void handlePaidOrder(StripeEventDTO stripeEvent) {
-    String stripeSessionId = stripeEvent.detail().data().stripeObject().sessionId();
-    log.info("Handling paid order. stripe session: {}",
-        stripeSessionId);
-    Order order = orderRepository.findByPaymentReference(stripeSessionId).orElseThrow(() -> {
-      log.error("Order for stripe session id: {} not found",
-          stripeSessionId);
-      return new DomainStateException("Unable to process order.");
-    });
-    order.confirmPaidOrder();
-    orderRepository.save(order);
-    log.info("Order {} confirmed paid", order.getOrderId());
 
-    log.info("Begin to publish confirm reservation event. OrderId: {} ",
-        order.getOrderId());
-    orderEventPublisher.publishConfirmReservationEvent(order.getOrderId());
+  /**
+   * Receives webhook from the payment provider, marks order as paid and publishes an order-paid
+   * event
+   */
+  public void handlePaymentWebhook(PaymentProviderType paymentType, String payload,
+      String signature) {
+    log.debug("Handling payment webhook...");
+    PaymentProvider paymentProvider = paymentResolver.resolve(paymentType);
+    PaymentWebhookEvent event = paymentProvider.parseWebhookEvent(payload, signature);
+    if (event == null) {
+      log.debug("Payment provider returned null event. Skipping webhook.");
+      return;
+    }
+    Order order = orderRepository.findByPaymentReference(event.paymentReference())
+        .orElseThrow(() -> {
+          log.error("Order for stripe session id: {} not found",
+              event.paymentReference());
+          return new DomainStateException("Unable to process order.");
+        });
+    if (event.eventType().equals(PaymentEventType.PAID)) {
+      log.debug("Order {} is paid. Confirming paid order...", order.getOrderId());
+      order.confirmPaidOrder();
+      orderRepository.save(order);
+      log.info("Order {} confirmed paid", order.getOrderId());
+      log.debug("Begin to publish confirm reservation event. OrderId...");
+      orderEventPublisher.publishConfirmReservationEvent(order.getOrderId());
+
+    }
+
+
   }
 
 

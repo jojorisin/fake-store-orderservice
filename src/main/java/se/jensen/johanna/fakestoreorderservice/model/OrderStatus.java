@@ -1,5 +1,5 @@
 package se.jensen.johanna.fakestoreorderservice.model;
 
 public enum OrderStatus {
-  PENDING, PAID, CANCELLED, SHIPPED, COLLECTED, COMPLETED
+  PENDING, PAID, UNPAID, CANCELLED, SHIPPED, COLLECTED, COMPLETED
 }

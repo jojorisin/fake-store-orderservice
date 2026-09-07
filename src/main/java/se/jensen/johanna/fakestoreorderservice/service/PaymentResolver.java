@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import se.jensen.johanna.fakestoreorderservice.exception.UnsupportedPaymentTypeException;
-import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentType;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -14,7 +14,8 @@ public class PaymentResolver {
 
   private final List<PaymentProvider> paymentProviders;
 
-  public PaymentProvider resolve(PaymentType paymentType) {
+  public PaymentProvider resolve(PaymentProviderType paymentType) {
+    log.debug("Resolving payment type {}", paymentType);
     return paymentProviders.stream()
         .filter(paymentProvider -> paymentProvider.supports(paymentType))
         .findFirst().orElseThrow(() -> {

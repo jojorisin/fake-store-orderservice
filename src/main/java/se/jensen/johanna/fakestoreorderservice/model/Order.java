@@ -21,7 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentType;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -56,7 +56,7 @@ public class Order {
   private String paymentReference;
 
   @Enumerated(EnumType.STRING)
-  private PaymentType paymentType;
+  private PaymentProviderType paymentType;
 
 
   private Instant createdAt;
@@ -94,7 +94,7 @@ public class Order {
         .reduce(BigDecimal.ZERO, BigDecimal::add);
   }
 
-  public void assignPaymentReferences(String paymentReference, PaymentType paymentType) {
+  public void assignPaymentReferences(String paymentReference, PaymentProviderType paymentType) {
     this.paymentReference = paymentReference;
     this.paymentType = paymentType;
   }
@@ -105,5 +105,6 @@ public class Order {
     }
     this.orderStatus = OrderStatus.PAID;
   }
+
 
 }

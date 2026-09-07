@@ -41,7 +41,7 @@ import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
-import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentType;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -82,12 +82,12 @@ class OrderServiceTest {
 
     when(jwt.getSubject()).thenReturn(UUID.randomUUID().toString());
     when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
-    when(paymentResolver.resolve(PaymentType.STRIPE)).thenReturn(paymentProvider);
+    when(paymentResolver.resolve(PaymentProviderType.STRIPE)).thenReturn(paymentProvider);
 
     CartItemRequest cartItem = createCartItemRequest(sharedProductId, 2);
     Set<CartItemRequest> itemRequests = Set.of(cartItem);
 
-    OrderRequest request = new OrderRequest(PaymentType.STRIPE, itemRequests,
+    OrderRequest request = new OrderRequest(PaymentProviderType.STRIPE, itemRequests,
         defaultAddressRequest());
 
     ProductDTO product = createProductDtoWithId(sharedProductId);
