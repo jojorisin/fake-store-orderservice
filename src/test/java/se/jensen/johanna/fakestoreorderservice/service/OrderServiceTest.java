@@ -66,7 +66,6 @@ class OrderServiceTest {
 
   @BeforeEach
   void setUp() {
-    UUID productId = UUID.randomUUID();
     jwt = mock(Jwt.class);
 
 
