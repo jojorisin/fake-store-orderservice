@@ -41,6 +41,7 @@ import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -50,8 +51,9 @@ class OrderServiceTest {
   @Mock
   private OrderRepository orderRepository;
 
+
   @Mock
-  private PaymentService paymentService;
+  private PaymentResolver paymentResolver;
   @Mock
   private OrderItemMapper orderItemMapper;
   @Mock
@@ -64,7 +66,6 @@ class OrderServiceTest {
 
   @BeforeEach
   void setUp() {
-
     jwt = mock(Jwt.class);
 
 
@@ -74,44 +75,38 @@ class OrderServiceTest {
   @Test
   void putOrder_ShouldSuccessfullyPutOrderAndSave() {
     UUID sharedProductId = UUID.randomUUID();
-    UUID buyerId = UUID.randomUUID();
+    PaymentProvider paymentProvider = mock(StripePaymentProvider.class);
 
-    when(jwt.getSubject()).thenReturn(buyerId.toString());
+    when(jwt.getSubject()).thenReturn(UUID.randomUUID().toString());
     when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
+    when(paymentResolver.resolve(PaymentProviderType.STRIPE)).thenReturn(paymentProvider);
 
-    CartItemRequest cartItem = new CartItemRequest(sharedProductId, 2);
+    CartItemRequest cartItem = createCartItemRequest(sharedProductId, 2);
     Set<CartItemRequest> itemRequests = Set.of(cartItem);
 
-    AddressRequest addressRequest = new AddressRequest("firstname", "lastname", null, "streetname1",
-        null, "54345", "city", "country");
-    OrderRequest request = new OrderRequest(itemRequests, addressRequest);
+    OrderRequest request = new OrderRequest(PaymentProviderType.STRIPE, itemRequests,
+        defaultAddressRequest());
 
-    ProductDTO productDto = new ProductDTO(sharedProductId, "Titel", 100, "d", "s");
-    ProductBatchResponse fakeResponse = new ProductBatchResponse(List.of(productDto));
+    ProductDTO product = createProductDtoWithId(sharedProductId);
+    ProductBatchResponse fakeResponse = new ProductBatchResponse(List.of(product));
 
-    OrderItem realItem = OrderItem.builder()
-        .pricePerItem(new BigDecimal("100.00"))
-        .quantity(2)
-        .title("Titel")
-        .build();
+    OrderItem realItem = defaultOrderItem();
 
     when(addressMapper.toShippingAddress(any())).thenReturn(mock(ShippingAddress.class));
-
     when(restTemplate.postForObject(anyString(), any(HttpEntity.class),
         eq(ProductBatchResponse.class)))
         .thenReturn(fakeResponse);
-
     when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
         .thenReturn(new ResponseEntity<>(HttpStatus.CREATED));
-
     when(orderItemMapper.toOrderItem(any(ProductDTO.class), anyInt())).thenReturn(realItem);
 
-    when(paymentService.createCheckoutSession(any(Order.class), anyString()))
+    when(paymentProvider.createCheckoutSession(any(Order.class), anyString()))
         .thenReturn(new CheckoutResponse("http://url", "123"));
 
     CheckoutResponse result = orderService.putOrder(jwt, request);
-    assertThat(result.stripeUrl()).isEqualTo("http://url");
-    verify(orderRepository, times(1)).save(any(Order.class));
+    assertThat(result.checkoutUrl()).isEqualTo("http://url");
+    // saves order two times. First for id to create a checkout session, then to assign that session to order.
+    verify(orderRepository, times(2)).save(any(Order.class));
   }
 
   @Test
@@ -135,6 +130,40 @@ class OrderServiceTest {
     assertThrows(DomainStateException.class,
         () -> orderService.reserveOrderItems(reservationRequest));
 
+  }
+
+  private CartItemRequest createCartItemRequest(UUID productId, Integer quantity) {
+    return new CartItemRequest(productId, quantity);
+  }
+
+  private CartItemRequest defaultCartItemRequest() {
+    return new CartItemRequest(UUID.randomUUID(), 1);
+  }
+
+  private AddressRequest defaultAddressRequest() {
+    return new AddressRequest("firstname", "lastname", "co", "streetname1",
+        "streetName2", "54345", "city", "country");
+  }
+
+  private ProductDTO defaultProductDto() {
+    return new ProductDTO(UUID.randomUUID(), "Title", 100, "description", "image");
+  }
+
+  private ProductDTO createProductDtoWithId(UUID productId) {
+    return new ProductDTO(productId, "Title", 100, "description", "image");
+  }
+
+  private ProductDTO createProductDto(UUID productId, String title, Integer price,
+      String description, String image) {
+    return new ProductDTO(productId, title, price, description, image);
+  }
+
+  private OrderItem defaultOrderItem() {
+    return OrderItem.builder()
+        .pricePerItem(new BigDecimal("100.00"))
+        .quantity(1)
+        .title("Title")
+        .build();
   }
 
 }
