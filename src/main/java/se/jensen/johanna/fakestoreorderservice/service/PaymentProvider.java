@@ -7,11 +7,11 @@ import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProvider
 
 public interface PaymentProvider {
 
-  public boolean supports(PaymentProviderType paymentMethod);
+  boolean supports(PaymentProviderType paymentMethod);
 
-  public PaymentProviderType getPaymentType();
+  PaymentProviderType getPaymentType();
 
   CheckoutResponse createCheckoutSession(Order order, String email);
 
-  public PaymentWebhookEvent parseWebhookEvent(String payload, String signature);
+  PaymentWebhookEvent parseWebhookEvent(String payload, String signature);
 }

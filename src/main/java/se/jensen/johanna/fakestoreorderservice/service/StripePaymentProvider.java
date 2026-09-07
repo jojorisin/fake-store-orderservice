@@ -13,7 +13,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.SessionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +30,6 @@ import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProvider
 @Slf4j
 public class StripePaymentProvider implements PaymentProvider {
 
-  private final SessionFactory sessionFactory;
   @Value("${stripe.api-key}")
   private String stripeApiKey;
 
@@ -43,10 +41,6 @@ public class StripePaymentProvider implements PaymentProvider {
 
   @Value("${stripe.webhook-secret}")
   private String stripeWebhookSecret;
-
-  public StripePaymentProvider(SessionFactory sessionFactory) {
-    this.sessionFactory = sessionFactory;
-  }
 
   @PostConstruct
   public void init() {
@@ -132,7 +126,7 @@ public class StripePaymentProvider implements PaymentProvider {
             .orElseGet(() -> {
               log.warn("API mismatch, using unsafe deserialization");
               try {
-                return (Session) event.getDataObjectDeserializer().deserializeUnsafe();
+                return event.getDataObjectDeserializer().deserializeUnsafe();
 
               } catch (EventDataObjectDeserializationException e) {
                 log.error("Error parsing webhook event {}", e.getMessage());

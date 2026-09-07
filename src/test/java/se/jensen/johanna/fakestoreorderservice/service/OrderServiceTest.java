@@ -51,8 +51,6 @@ class OrderServiceTest {
   @Mock
   private OrderRepository orderRepository;
 
-  @Mock
-  private StripePaymentProvider paymentService;
 
   @Mock
   private PaymentResolver paymentResolver;
@@ -108,7 +106,8 @@ class OrderServiceTest {
 
     CheckoutResponse result = orderService.putOrder(jwt, request);
     assertThat(result.checkoutUrl()).isEqualTo("http://url");
-    verify(orderRepository, times(1)).save(any(Order.class));
+    // saves order two times. First for id to create a checkout session, then to assign that session to order.
+    verify(orderRepository, times(2)).save(any(Order.class));
   }
 
   @Test
