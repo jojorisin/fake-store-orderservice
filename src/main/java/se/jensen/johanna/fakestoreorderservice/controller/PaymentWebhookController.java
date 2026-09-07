@@ -1,6 +1,5 @@
 package se.jensen.johanna.fakestoreorderservice.controller;
 
-import com.stripe.exception.StripeException;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +21,7 @@ public class PaymentWebhookController {
 
   @PostMapping("/stripe-webhook")
   public ResponseEntity<Void> handleWebhook(@RequestBody byte[] payload,
-      @RequestHeader("Stripe-Signature") String signature) throws StripeException {
+      @RequestHeader("Stripe-Signature") String signature) {
     String payloadString = new String(payload, StandardCharsets.UTF_8);
     orderService.handlePaymentWebhook(PaymentProviderType.STRIPE, payloadString, signature);
     return ResponseEntity.ok().build();
