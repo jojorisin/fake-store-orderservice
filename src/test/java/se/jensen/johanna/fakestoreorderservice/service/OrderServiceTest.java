@@ -51,9 +51,10 @@ class OrderServiceTest {
   @Mock
   private OrderRepository orderRepository;
 
-
   @Mock
-  private PaymentResolver paymentResolver;
+  private PaymentProvider paymentProvider;
+
+
   @Mock
   private OrderItemMapper orderItemMapper;
   @Mock
@@ -79,7 +80,6 @@ class OrderServiceTest {
 
     when(jwt.getSubject()).thenReturn(UUID.randomUUID().toString());
     when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
-    when(paymentResolver.resolve(PaymentProviderType.STRIPE)).thenReturn(paymentProvider);
 
     CartItemRequest cartItem = createCartItemRequest(sharedProductId, 2);
     Set<CartItemRequest> itemRequests = Set.of(cartItem);

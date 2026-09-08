@@ -14,13 +14,15 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
 import se.jensen.johanna.fakestoreorderservice.exception.CheckoutException;
-import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
 import se.jensen.johanna.fakestoreorderservice.exception.InvalidWebhookSignatureException;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.InvalidOrderStateException;
+import se.jensen.johanna.fakestoreorderservice.exception.infra.PaymentProviderException;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentEventType;
@@ -62,7 +64,6 @@ public class StripePaymentProvider implements PaymentProvider {
   @Transactional
   public CheckoutResponse createCheckoutSession(Order order, String email) {
     List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems());
-
     try {
       SessionCreateParams params = SessionCreateParams.builder()
           .setMode(SessionCreateParams.Mode.PAYMENT).setCustomerEmail(email)
@@ -71,13 +72,11 @@ public class StripePaymentProvider implements PaymentProvider {
           .addAllLineItem(lineItems)
           .putMetadata("orderId", order.getOrderId().toString()).build();
       Session session = Session.create(params);
-
       return new CheckoutResponse(session.getUrl(), session.getId());
-
     } catch (StripeException e) {
-      log.error("Error creating checkout session for order {} {}, {}", order.getOrderId(), e,
-          e.getMessage());
-      throw new CheckoutException("Unable to process payment.");
+      log.error("Error creating checkout session with payment provider: {} for order: {}",
+          getPaymentType(), order.getOrderId(), e);
+      throw new PaymentProviderException("Unable to process payment.", e);
     }
 
   }
@@ -95,8 +94,8 @@ public class StripePaymentProvider implements PaymentProvider {
 
     }
     if (lineItems.isEmpty()) {
-      log.error("Error creating checkout session. No line items found.");
-      throw new CheckoutException("Unable to process payment.");
+      log.error("Line items was empty. Order items: {}", orderItems);
+      throw new InvalidOrderStateException("Unable to process payment.");
     }
     return lineItems;
   }
@@ -107,7 +106,8 @@ public class StripePaymentProvider implements PaymentProvider {
     if (signature == null) {
       log.warn("No stripe signature found in headers");
       throw new InvalidWebhookSignatureException(
-          "Unable to process payment. No stripe signature found in headers.");
+          "Unable to process payment. No stripe signature found in headers.",
+          HttpStatus.BAD_REQUEST);
     }
     Event event;
     try {
@@ -136,7 +136,7 @@ public class StripePaymentProvider implements PaymentProvider {
         orderId = session.getMetadata().get("orderId");
         if (orderId == null || orderId.isBlank()) {
           log.error("Order id was not found in metadata. Stripe session id: {}", session.getId());
-          throw new DomainStateException("Unable to process payment.");
+          // throw new DomainStateException("Unable to process payment.",);
         }
         eventType = session.getPaymentStatus().equals("paid") ? PaymentEventType.PAID
             : PaymentEventType.CANCELLED;

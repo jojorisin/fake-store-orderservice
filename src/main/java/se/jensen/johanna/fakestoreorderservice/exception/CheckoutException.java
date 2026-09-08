@@ -1,8 +1,12 @@
 package se.jensen.johanna.fakestoreorderservice.exception;
 
+import se.jensen.johanna.fakestoreorderservice.exception.domain.DomainException;
+
 public class CheckoutException extends DomainException {
 
   public CheckoutException(String message) {
-    super(message, ErrorType.CHECKOUT_ERROR);
+    super(message, ErrorCode.CHECKOUT_ERROR);
   }
+
+
 }

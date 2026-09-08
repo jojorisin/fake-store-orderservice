@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import se.jensen.johanna.fakestoreorderservice.dto.ErrorResponse;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.DomainException;
 
 @RestControllerAdvice
 @Slf4j
@@ -21,7 +22,7 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(DomainException.class)
   public ResponseEntity<ErrorResponse> handleDomainException(DomainException e,
       HttpServletRequest request) {
-    if (e.getErrorCode() == ErrorType.ILLEGAL_STATE) {
+    if (e.getErrorCode() == ErrorCode.ILLEGAL_STATE) {
       log.error("Unexpected error: {}", e.getMessage(), e);
     } else {
       log.warn("Domain Error: [{}] {} | Path: {}",
