@@ -34,7 +34,7 @@ import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
-import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
+import se.jensen.johanna.fakestoreorderservice.exception.infra.InternalServiceException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
@@ -50,17 +50,14 @@ class OrderServiceTest {
   private OrderService orderService;
   @Mock
   private OrderRepository orderRepository;
-
-
   @Mock
-  private PaymentResolver paymentResolver;
+  private PaymentProvider paymentProvider;
   @Mock
   private OrderItemMapper orderItemMapper;
   @Mock
   private AddressMapper addressMapper;
   @Mock
   private RestTemplate restTemplate;
-
   private Jwt jwt;
 
 
@@ -75,11 +72,9 @@ class OrderServiceTest {
   @Test
   void putOrder_ShouldSuccessfullyPutOrderAndSave() {
     UUID sharedProductId = UUID.randomUUID();
-    PaymentProvider paymentProvider = mock(StripePaymentProvider.class);
 
     when(jwt.getSubject()).thenReturn(UUID.randomUUID().toString());
     when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
-    when(paymentResolver.resolve(PaymentProviderType.STRIPE)).thenReturn(paymentProvider);
 
     CartItemRequest cartItem = createCartItemRequest(sharedProductId, 2);
     Set<CartItemRequest> itemRequests = Set.of(cartItem);
@@ -115,19 +110,18 @@ class OrderServiceTest {
     ReservationRequest reservationRequest = new ReservationRequest(
         Set.of(new CartItemRequest(UUID.randomUUID(), 2)), UUID.randomUUID());
     orderService.reserveOrderItems(reservationRequest);
-    //i want to verify i send the request one time
     verify(restTemplate, times(1)).postForEntity(anyString(), any(HttpEntity.class),
         eq(Void.class));
   }
 
   @Test
-  void reserveOrderItems_ShouldThrowDomainStateExceptionWhenUnableToReserve() {
+  void reserveOrderItems_ShouldThrowInternalServiceExceptionWhenUnableToReserve() {
     ReservationRequest reservationRequest = new ReservationRequest(
         Set.of(new CartItemRequest(UUID.randomUUID(), 2)), UUID.randomUUID());
     when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class))).thenThrow(
         new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
 
-    assertThrows(DomainStateException.class,
+    assertThrows(InternalServiceException.class,
         () -> orderService.reserveOrderItems(reservationRequest));
 
   }

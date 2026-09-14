@@ -20,7 +20,8 @@ import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
-import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.ProductNotFound;
+import se.jensen.johanna.fakestoreorderservice.exception.infra.InternalServiceException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.messaging.OrderEventPublisher;
@@ -45,8 +46,8 @@ public class OrderService {
   private final OrderItemMapper orderItemMapper;
   private final AddressMapper addressMapper;
   private final RestTemplate restTemplate;
+  private final PaymentProvider paymentProvider;
   private final OrderEventPublisher orderEventPublisher;
-  private final PaymentResolver paymentResolver;
 
   /**
    * Creates an order with status PENDING. Retrieves cart items from product service then validates
@@ -60,7 +61,7 @@ public class OrderService {
 
   public CheckoutResponse putOrder(Jwt jwt, OrderRequest request) {
     log.info("Creating order for user {}. request {}...", jwt.getSubject(), request);
-    PaymentProvider paymentProvider = paymentResolver.resolve(request.paymentType());
+
     Set<UUID> productIds = request.itemRequests().stream().map(CartItemRequest::productId)
         .collect(Collectors.toSet());
     List<ProductDTO> products = fetchCartProducts(productIds);
@@ -69,15 +70,17 @@ public class OrderService {
     Order pendingOrder = Order.create(UUID.fromString(jwt.getSubject()), orderItems,
         addressMapper.toShippingAddress(request.addressRequest()));
     orderRepository.save(pendingOrder);
-    log.info("Pending Order {} created. Reserving order items...", pendingOrder.getOrderId());
+    log.debug("Pending Order {} created. Reserving order items...", pendingOrder.getOrderId());
     reserveOrderItems(new ReservationRequest(request.itemRequests(), pendingOrder.getOrderId()));
 
-    log.info("Creating checkout session for order {}...", pendingOrder.getOrderId());
+    log.debug("Creating checkout session for order {}...", pendingOrder.getOrderId());
     CheckoutResponse response = paymentProvider.createCheckoutSession(pendingOrder,
         jwt.getClaimAsString("email"));
     pendingOrder.assignPaymentReferences(response.paymentReference(),
         paymentProvider.getPaymentType());
     orderRepository.save(pendingOrder);
+    log.info("Order created. Order id: {}, User: {}", pendingOrder.getOrderId(),
+        pendingOrder.getBuyerId());
 
     return response;
 
@@ -89,7 +92,7 @@ public class OrderService {
    * @param reservationRequest Set of product id-quantity and order id to track reservation
    */
   public void reserveOrderItems(ReservationRequest reservationRequest) {
-    log.info("Reserving order items {} for order {}...", reservationRequest.cartItemRequests(),
+    log.debug("Reserving order items {} for order {}...", reservationRequest.cartItemRequests(),
         reservationRequest.orderId());
     HttpEntity<ReservationRequest> entity = new HttpEntity<>(reservationRequest);
     try {
@@ -100,7 +103,7 @@ public class OrderService {
     } catch (RestClientException e) {
       log.error("Unable to reserve order items from {}. status: {}", inventoryServiceUrl,
           e.getMessage());
-      throw new DomainStateException("Unable to process order.");
+      throw new InternalServiceException("Unable to reserve order items", e);
     }
 
   }
@@ -117,9 +120,9 @@ public class OrderService {
     return itemRequests.stream().map(item -> {
       ProductDTO productDTO = productMap.get(item.productId());
       if (productDTO == null) {
-        log.warn("Unable to validate cart item. Client sent invalid product id {}",
+        log.warn("Product id: {} was not found in product service response.",
             item.productId());
-        throw new IllegalArgumentException("Unable to process order.");
+        throw new ProductNotFound("Product not found.");
       }
       return orderItemMapper.toOrderItem(productDTO, item.quantity());
     }).collect(Collectors.toList());
@@ -132,25 +135,38 @@ public class OrderService {
   public List<ProductDTO> fetchCartProducts(Set<UUID> productIds) {
     log.debug("Fetching products from product service for productIds: {}...", productIds);
     HttpEntity<Set<UUID>> entity = new HttpEntity<>(productIds);
-    ProductBatchResponse response = restTemplate.postForObject(
-        productServiceUrl + "/internal/products/batch", entity, ProductBatchResponse.class);
-    if (response == null || response.products() == null || response.products().isEmpty()) {
-      log.error("Unable to get products from product service");
-      throw new DomainStateException("Unable to process order.");
+    try {
+      ProductBatchResponse response = restTemplate.postForObject(
+          productServiceUrl + "/internal/products/batch", entity, ProductBatchResponse.class);
+      if (response == null || response.products() == null) {
+        log.error(
+            "Product service returned null when fetching products. Response: {}, Product ids: {} ",
+            response,
+            productIds);
+        throw new InternalServiceException("Invalid response from product-service");
+      }
+      if (response.products().isEmpty()) {
+        log.warn("Product service returned empty list when fetching cart items. Product ids: {}",
+            productIds);
+        throw new ProductNotFound("Products not found.");
+      }
+
+      return response.products();
+    } catch (RestClientException e) {
+      log.error("Failed to fetch products from product-service. Product ids: {}", productIds, e);
+      throw new InternalServiceException("Unable to fetch products from product service", e);
     }
-    return response.products();
 
   }
 
 
   /**
    * Receives webhook from the payment provider, marks order as paid and publishes an order-paid
-   * event
+   * event. Note: Currently only one implemented payment provider
    */
   public void handlePaymentWebhook(PaymentProviderType paymentType, String payload,
       String signature) {
-    log.debug("Handling payment webhook...");
-    PaymentProvider paymentProvider = paymentResolver.resolve(paymentType);
+    log.debug("Handling payment webhook for payment provider: {}...", paymentType);
     PaymentWebhookEvent event = paymentProvider.parseWebhookEvent(payload, signature);
     if (event == null) {
       log.debug("Payment provider returned null event. Skipping webhook.");
@@ -160,7 +176,7 @@ public class OrderService {
         .orElseThrow(() -> {
           log.error("Order for stripe session id: {} not found",
               event.paymentReference());
-          return new DomainStateException("Unable to process order.");
+          return new InternalServiceException("Order not found");
         });
     if (event.eventType().equals(PaymentEventType.PAID)) {
       log.debug("Order {} is paid. Confirming paid order...", order.getOrderId());

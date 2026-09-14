@@ -21,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.InvalidOrderStateException;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @Entity
@@ -101,7 +102,7 @@ public class Order {
 
   public void confirmPaidOrder() {
     if (!this.orderStatus.equals(OrderStatus.PENDING)) {
-      throw new IllegalStateException("Order is already paid");
+      throw new InvalidOrderStateException("Order is already paid");
     }
     this.orderStatus = OrderStatus.PAID;
   }
