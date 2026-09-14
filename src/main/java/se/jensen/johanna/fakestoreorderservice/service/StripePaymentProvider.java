@@ -14,14 +14,11 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
-import se.jensen.johanna.fakestoreorderservice.exception.CheckoutException;
-import se.jensen.johanna.fakestoreorderservice.exception.InvalidWebhookSignatureException;
-import se.jensen.johanna.fakestoreorderservice.exception.domain.InvalidOrderStateException;
+import se.jensen.johanna.fakestoreorderservice.exception.infra.InvalidPaymentWebhookException;
 import se.jensen.johanna.fakestoreorderservice.exception.infra.PaymentProviderException;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
@@ -63,6 +60,8 @@ public class StripePaymentProvider implements PaymentProvider {
   @Override
   @Transactional
   public CheckoutResponse createCheckoutSession(Order order, String email) {
+    log.debug("Creating stripe checkout session...");
+    log.debug("Creating line items for checkout. order id: {}", order.getOrderId());
     List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems());
     try {
       SessionCreateParams params = SessionCreateParams.builder()
@@ -74,14 +73,13 @@ public class StripePaymentProvider implements PaymentProvider {
       Session session = Session.create(params);
       return new CheckoutResponse(session.getUrl(), session.getId());
     } catch (StripeException e) {
-      log.error("Error creating checkout session with payment provider: {} for order: {}",
-          getPaymentType(), order.getOrderId(), e);
       throw new PaymentProviderException("Unable to process payment.", e);
     }
 
   }
 
   public List<SessionCreateParams.LineItem> createLineItems(List<OrderItem> orderItems) {
+    log.debug("Creating line items from order items: {}", orderItems);
     List<SessionCreateParams.LineItem> lineItems = new ArrayList<>();
     for (OrderItem item : orderItems) {
       SessionCreateParams.LineItem lineItem = SessionCreateParams.LineItem.builder()
@@ -93,29 +91,21 @@ public class StripePaymentProvider implements PaymentProvider {
       lineItems.add(lineItem);
 
     }
-    if (lineItems.isEmpty()) {
-      log.error("Line items was empty. Order items: {}", orderItems);
-      throw new InvalidOrderStateException("Unable to process payment.");
-    }
     return lineItems;
   }
 
   @Override
   public PaymentWebhookEvent parseWebhookEvent(String payload, String signature) {
-    log.debug("Parsing webhook event {}", payload);
+    log.debug("Parsing stripe webhook event...");
     if (signature == null) {
-      log.warn("No stripe signature found in headers");
-      throw new InvalidWebhookSignatureException(
-          "Unable to process payment. No stripe signature found in headers.",
-          HttpStatus.BAD_REQUEST);
+      throw new InvalidPaymentWebhookException(
+          "Unable to process payment. No stripe signature found in headers.");
     }
     Event event;
     try {
-      log.debug("Parsing webhook event {}", payload);
       event = Webhook.constructEvent(payload, signature, stripeWebhookSecret);
     } catch (SignatureVerificationException e) {
-      log.error("Error parsing webhook event {}", e.getMessage());
-      throw new CheckoutException("Unable to process payment.");
+      throw new InvalidPaymentWebhookException("Unable to construct webhook event", e);
     }
     Session session;
     String orderId;
@@ -127,27 +117,25 @@ public class StripePaymentProvider implements PaymentProvider {
               log.warn("API mismatch, using unsafe deserialization");
               try {
                 return event.getDataObjectDeserializer().deserializeUnsafe();
-
               } catch (EventDataObjectDeserializationException e) {
-                log.error("Error parsing webhook event {}", e.getMessage());
-                throw new CheckoutException("Unable to process payment.");
+                log.debug("Error parsing stripe webhook event.");
+                throw new InvalidPaymentWebhookException("Unable to deserialize stripe event.", e);
               }
             });
+        if (session.getMetadata() == null) {
+          throw new InvalidPaymentWebhookException("Stripe Session metadata is null.");
+        }
         orderId = session.getMetadata().get("orderId");
         if (orderId == null || orderId.isBlank()) {
-          log.error("Order id was not found in metadata. Stripe session id: {}", session.getId());
-          // throw new DomainStateException("Unable to process payment.",);
+          throw new InvalidPaymentWebhookException("Order id is missing from metadata.");
         }
-        eventType = session.getPaymentStatus().equals("paid") ? PaymentEventType.PAID
+        eventType = "paid".equals(session.getPaymentStatus()) ? PaymentEventType.PAID
             : PaymentEventType.CANCELLED;
         return new PaymentWebhookEvent(eventType, orderId, session.getId());
-
       default:
         log.debug("Unsupported event type. Returning null for event type {}", event.getType());
         return null;
-
     }
-
 
   }
 

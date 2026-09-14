@@ -7,10 +7,10 @@ import se.jensen.johanna.fakestoreorderservice.exception.ErrorCode;
 public class InternalServiceException extends InfrastructureException {
 
   public InternalServiceException(String message) {
-    super(message, ErrorCode.INTERNAL_SERVICE_ERROR);
+    super(message, ErrorCode.SERVICE_ERROR);
   }
 
   public InternalServiceException(String message, Throwable cause) {
-    super(message, ErrorCode.INTERNAL_SERVICE_ERROR, cause);
+    super(message, ErrorCode.SERVICE_ERROR, cause);
   }
 }

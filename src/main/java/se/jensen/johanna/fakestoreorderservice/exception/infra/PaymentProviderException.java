@@ -7,4 +7,5 @@ public class PaymentProviderException extends InfrastructureException {
   public PaymentProviderException(String message, Throwable cause) {
     super(message, ErrorCode.PAYMENT_PROVIDER_ERROR, cause);
   }
+
 }

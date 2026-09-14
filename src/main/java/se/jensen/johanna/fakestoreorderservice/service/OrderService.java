@@ -120,7 +120,7 @@ public class OrderService {
     return itemRequests.stream().map(item -> {
       ProductDTO productDTO = productMap.get(item.productId());
       if (productDTO == null) {
-        log.warn("Unable to validate cart item. Product id: {}",
+        log.warn("Product id: {} was not found in product service response.",
             item.productId());
         throw new ProductNotFound("Product not found.");
       }
@@ -146,7 +146,7 @@ public class OrderService {
         throw new InternalServiceException("Invalid response from product-service");
       }
       if (response.products().isEmpty()) {
-        log.warn("Product service returned empty list when fetching products. Product ids: {}",
+        log.warn("Product service returned empty list when fetching cart items. Product ids: {}",
             productIds);
         throw new ProductNotFound("Products not found.");
       }
@@ -162,11 +162,11 @@ public class OrderService {
 
   /**
    * Receives webhook from the payment provider, marks order as paid and publishes an order-paid
-   * event
+   * event. Note: Currently only one implemented payment provider
    */
   public void handlePaymentWebhook(PaymentProviderType paymentType, String payload,
       String signature) {
-    log.debug("Handling payment webhook...");
+    log.debug("Handling payment webhook for payment provider: {}...", paymentType);
     PaymentWebhookEvent event = paymentProvider.parseWebhookEvent(payload, signature);
     if (event == null) {
       log.debug("Payment provider returned null event. Skipping webhook.");
