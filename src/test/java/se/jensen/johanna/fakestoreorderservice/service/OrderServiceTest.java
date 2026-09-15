@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,12 +22,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
+import se.jensen.johanna.fakestoreorderservice.client.InventoryClient;
+import se.jensen.johanna.fakestoreorderservice.client.ProductClient;
 import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
@@ -53,11 +53,14 @@ class OrderServiceTest {
   @Mock
   private PaymentProvider paymentProvider;
   @Mock
+  private ProductClient productClient;
+  @Mock
+  private InventoryClient inventoryClient;
+  @Mock
   private OrderItemMapper orderItemMapper;
   @Mock
   private AddressMapper addressMapper;
-  @Mock
-  private RestTemplate restTemplate;
+
   private Jwt jwt;
 
 
@@ -88,11 +91,7 @@ class OrderServiceTest {
     OrderItem realItem = defaultOrderItem();
 
     when(addressMapper.toShippingAddress(any())).thenReturn(mock(ShippingAddress.class));
-    when(restTemplate.postForObject(anyString(), any(HttpEntity.class),
-        eq(ProductBatchResponse.class)))
-        .thenReturn(fakeResponse);
-    when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
-        .thenReturn(new ResponseEntity<>(HttpStatus.CREATED));
+    when(productClient.getProductBatch(anySet())).thenReturn(fakeResponse);
     when(orderItemMapper.toOrderItem(any(ProductDTO.class), anyInt())).thenReturn(realItem);
 
     when(paymentProvider.createCheckoutSession(any(Order.class), anyString()))
@@ -100,29 +99,19 @@ class OrderServiceTest {
 
     CheckoutResponse result = orderService.putOrder(jwt, request);
     assertThat(result.checkoutUrl()).isEqualTo("http://url");
-    // saves order two times. First for id to create a checkout session, then to assign that session to order.
-    verify(orderRepository, times(2)).save(any(Order.class));
+    verify(orderRepository, times(1)).save(any(Order.class));
+    verify(inventoryClient).reserveCart(any(ReservationRequest.class));
   }
 
-  @Test
-  void reserveOrderItems_ShouldSuccessfullyReserveOrderItems() {
-    // creating a request to use. values are not important
-    ReservationRequest reservationRequest = new ReservationRequest(
-        Set.of(new CartItemRequest(UUID.randomUUID(), 2)), UUID.randomUUID());
-    orderService.reserveOrderItems(reservationRequest);
-    verify(restTemplate, times(1)).postForEntity(anyString(), any(HttpEntity.class),
-        eq(Void.class));
-  }
 
   @Test
   void reserveOrderItems_ShouldThrowInternalServiceExceptionWhenUnableToReserve() {
-    ReservationRequest reservationRequest = new ReservationRequest(
-        Set.of(new CartItemRequest(UUID.randomUUID(), 2)), UUID.randomUUID());
-    when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class))).thenThrow(
-        new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
+    ReservationRequest request = mock(ReservationRequest.class);
+    doThrow(new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR)).when(inventoryClient)
+        .reserveCart(request);
 
     assertThrows(InternalServiceException.class,
-        () -> orderService.reserveOrderItems(reservationRequest));
+        () -> orderService.reserveCart(request));
 
   }
 
@@ -130,27 +119,17 @@ class OrderServiceTest {
     return new CartItemRequest(productId, quantity);
   }
 
-  private CartItemRequest defaultCartItemRequest() {
-    return new CartItemRequest(UUID.randomUUID(), 1);
-  }
 
   private AddressRequest defaultAddressRequest() {
     return new AddressRequest("firstname", "lastname", "co", "streetname1",
         "streetName2", "54345", "city", "country");
   }
 
-  private ProductDTO defaultProductDto() {
-    return new ProductDTO(UUID.randomUUID(), "Title", 100, "description", "image");
-  }
 
   private ProductDTO createProductDtoWithId(UUID productId) {
     return new ProductDTO(productId, "Title", 100, "description", "image");
   }
 
-  private ProductDTO createProductDto(UUID productId, String title, Integer price,
-      String description, String image) {
-    return new ProductDTO(productId, title, price, description, image);
-  }
 
   private OrderItem defaultOrderItem() {
     return OrderItem.builder()

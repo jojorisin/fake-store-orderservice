@@ -5,7 +5,6 @@ import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
@@ -33,7 +32,7 @@ import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProvider
 public class Order {
 
   @Id
-  @GeneratedValue
+  //@GeneratedValue
   private UUID orderId;
 
   @NotNull
@@ -76,6 +75,7 @@ public class Order {
 
   public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address) {
     Order order = Order.builder()
+        .orderId(UUID.randomUUID())
         .buyerId(buyerId)
         .orderItems(orderItems)
         .shippingAddress(address)
