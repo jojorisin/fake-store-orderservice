@@ -1,31 +1,29 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
+import se.jensen.johanna.fakestoreorderservice.client.CartClient;
 import se.jensen.johanna.fakestoreorderservice.client.InventoryClient;
-import se.jensen.johanna.fakestoreorderservice.client.ProductClient;
+import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
+import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartItemDTO;
+import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
-import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
-import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
-import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
-import se.jensen.johanna.fakestoreorderservice.exception.domain.ProductNotFound;
-import se.jensen.johanna.fakestoreorderservice.exception.infra.InternalServiceException;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.EmptyCartException;
+import se.jensen.johanna.fakestoreorderservice.exception.infra.InternalClientException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.messaging.OrderEventPublisher;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
+import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentEventType;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
@@ -36,48 +34,47 @@ import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProvider
 public class OrderService {
 
   private final InventoryClient inventoryClient;
-  private final ProductClient productClient;
   private final OrderRepository orderRepository;
   private final OrderItemMapper orderItemMapper;
   private final AddressMapper addressMapper;
   private final PaymentProvider paymentProvider;
   private final OrderEventPublisher orderEventPublisher;
+  private final CartClient cartClient;
 
-  /**
-   * Creates an order with status PENDING. Retrieves cart items from product service then validates
-   * and reserves the cart in inventory. Returns a checkout response from the chosen payment
-   * provider
-   *
-   * @param request set containing id of products and quantity
-   * @return CheckoutResponse containing checkout url and payment reference
-   */
+  public CheckoutResponse putOrder(Jwt jwt, AddressRequest addressRequest) {
+    log.debug("fetching cart for order...");
+    CheckoutCartResponse cartToCheckout = cartClient.getCartForCheckout();
+    List<CheckoutCartItemDTO> cartItems = cartToCheckout.checkoutCart();
+    if (cartItems == null || cartItems.isEmpty()) {
+      log.debug("empty cart at checkout.");
+      throw new EmptyCartException("No items in cart. Please add products.");
+    }
+    log.debug("Checkout cart: {}", cartToCheckout);
+    List<OrderItem> orderItems = cartItems.stream().map(orderItemMapper::toOrderItem).toList();
+    ShippingAddress address = addressMapper.toShippingAddress(addressRequest);
 
-  public CheckoutResponse putOrder(Jwt jwt, OrderRequest request) {
-    log.info("Creating order for user {}. request {}...", jwt.getSubject(), request);
+    // create pending order
+    Order order = Order.create(UUID.fromString(jwt.getSubject()), orderItems, address);
+    UUID orderId = order.getOrderId();
 
-    Set<UUID> productIds = request.itemRequests().stream().map(CartItemRequest::productId)
-        .collect(Collectors.toSet());
-    List<ProductDTO> products = fetchCartProducts(productIds);
-    List<OrderItem> orderItems = validateAndMapOrderItems(products, request.itemRequests());
-
-    Order pendingOrder = Order.create(UUID.fromString(jwt.getSubject()), orderItems,
-        addressMapper.toShippingAddress(request.addressRequest()));
-
-    log.debug("Pending Order {} created. Reserving order items...", pendingOrder.getOrderId());
-    reserveCart(new ReservationRequest(request.itemRequests(), pendingOrder.getOrderId()));
-
-    log.debug("Creating checkout session for order {}...", pendingOrder.getOrderId());
-    CheckoutResponse response = paymentProvider.createCheckoutSession(pendingOrder,
+    // create checkout session with payment provider
+    log.debug("Creating checkout session for order...");
+    CheckoutResponse checkoutResponse = paymentProvider.createCheckoutSession(order,
         jwt.getClaimAsString("email"));
-    pendingOrder.assignPaymentReferences(response.paymentReference(),
+    // assign payment reference to order
+    order.assignPaymentReferences(checkoutResponse.paymentReference(),
         paymentProvider.getPaymentType());
+    // send reservation to inventory
+    List<CartItemRequest> itemsToReserve = cartItems.stream()
+        .map(orderItemMapper::toCartItemRequest).toList();
+    log.debug("send reservation request to inventory. items: {}", itemsToReserve);
+    reserveCart(new ReservationRequest(itemsToReserve, orderId));
 
-    orderRepository.save(pendingOrder);
-    log.info("Order created. Order id: {}, User: {}", pendingOrder.getOrderId(),
-        pendingOrder.getBuyerId());
-
-    return response;
+    orderRepository.save(order);
+    log.info("Order created. Order id:{}, User: {}", orderId, order.getBuyerId());
+    return checkoutResponse;
   }
+
 
   /**
    * Sends reservation request to inventory
@@ -96,59 +93,8 @@ public class OrderService {
           reservationRequest.cartItemRequests(),
           e
       );
-      throw new InternalServiceException("Unable to reserve order items", e);
+      throw new InternalClientException("Unable to reserve order items", e);
     }
-  }
-
-
-  /**
-   * Validates that the product ids in the request from the client match the response from
-   * product-service then maps them to order items
-   */
-  private List<OrderItem> validateAndMapOrderItems(List<ProductDTO> products,
-      Set<CartItemRequest> itemRequests) {
-    Map<UUID, ProductDTO> productMap = products.stream()
-        .collect(Collectors.toMap(ProductDTO::productId, p -> p));
-    return itemRequests.stream().map(item -> {
-      ProductDTO productDTO = productMap.get(item.productId());
-      if (productDTO == null) {
-        log.warn("Product id: {} was not found in product service response.",
-            item.productId());
-        throw new ProductNotFound("Product not found.");
-      }
-
-      return orderItemMapper.toOrderItem(productDTO, item.quantity());
-    }).collect(Collectors.toList());
-  }
-
-
-  /**
-   * Retrieves all products from the cart from productservice
-   */
-  private List<ProductDTO> fetchCartProducts(Set<UUID> productIds) {
-    log.debug("Fetching products from product service for productIds: {}...", productIds);
-
-    ProductBatchResponse batchResponse;
-    try {
-      batchResponse = productClient.getProductBatch(productIds);
-    } catch (RestClientException e) {
-      log.error("Failed to fetch products from product-service. Product ids: {}", productIds, e);
-      throw new InternalServiceException("Unable to fetch products from product service", e);
-    }
-    if (batchResponse == null || batchResponse.products() == null) {
-      log.error(
-          "Product service returned null when fetching products. Response: {}, Product ids: {} ",
-          batchResponse,
-          productIds);
-      throw new InternalServiceException("Invalid response from product-service");
-    }
-    if (batchResponse.products().isEmpty()) {
-      log.warn("Product service returned empty list when fetching cart items. Product ids: {}",
-          productIds);
-      throw new ProductNotFound("Products not found.");
-    }
-
-    return batchResponse.products();
   }
 
 
@@ -169,7 +115,7 @@ public class OrderService {
         .orElseThrow(() -> {
           log.error("Order for stripe session id: {} not found",
               event.paymentReference());
-          return new InternalServiceException("Order not found");
+          return new InternalClientException("Order not found");
         });
     if (event.eventType().equals(PaymentEventType.PAID)) {
       log.debug("Order {} is paid. Confirming paid order...", order.getOrderId());

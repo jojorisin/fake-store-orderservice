@@ -7,6 +7,17 @@ import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
 @Mapper(componentModel = "spring")
 public interface AddressMapper {
 
-  ShippingAddress toShippingAddress(AddressRequest addressRequest);
+  default ShippingAddress toShippingAddress(AddressRequest addressRequest) {
+    return ShippingAddress.create(
+        addressRequest.firstName(),
+        addressRequest.lastName(),
+        addressRequest.co(),
+        addressRequest.streetName(),
+        addressRequest.streetName2(),
+        addressRequest.postalCode(),
+        addressRequest.city(),
+        addressRequest.country()
+    );
+  }
 
 }
