@@ -41,6 +41,9 @@ public class StripePaymentProvider implements PaymentProvider {
   @Value("${stripe.webhook-secret}")
   private String stripeWebhookSecret;
 
+  @Value("${currency}")
+  private String currency;
+
   @PostConstruct
   public void init() {
     Stripe.apiKey = stripeApiKey;
@@ -83,8 +86,8 @@ public class StripePaymentProvider implements PaymentProvider {
     List<SessionCreateParams.LineItem> lineItems = new ArrayList<>();
     for (OrderItem item : orderItems) {
       SessionCreateParams.LineItem lineItem = SessionCreateParams.LineItem.builder()
-          .setQuantity(item.getQuantity().longValue()).setPriceData(
-              SessionCreateParams.LineItem.PriceData.builder().setCurrency("usd").setUnitAmount(
+          .setQuantity((long) item.getQuantity()).setPriceData(
+              SessionCreateParams.LineItem.PriceData.builder().setCurrency(currency).setUnitAmount(
                       item.getPricePerItem().multiply(BigDecimal.valueOf(100)).longValue())
                   .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
                       .setName(item.getTitle()).build()).build()).build();

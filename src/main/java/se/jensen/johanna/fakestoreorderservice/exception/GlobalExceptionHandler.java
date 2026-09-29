@@ -73,7 +73,8 @@ public class GlobalExceptionHandler {
 
   private HttpStatus getHttpStatus(ErrorCode errorCode) {
     return switch (errorCode) {
-      case INVALID_WEBHOOK, INVALID_ORDER_STATE, INVALID_INPUT -> HttpStatus.BAD_REQUEST;
+      case INVALID_WEBHOOK, INVALID_ORDER_STATE, INVALID_INPUT, EMPTY_CART ->
+          HttpStatus.BAD_REQUEST;
       case PRODUCT_NOT_FOUND -> HttpStatus.NOT_FOUND;
       case SERVICE_ERROR, INTERNAL_CLIENT_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
       case PAYMENT_PROVIDER_ERROR -> HttpStatus.BAD_GATEWAY;

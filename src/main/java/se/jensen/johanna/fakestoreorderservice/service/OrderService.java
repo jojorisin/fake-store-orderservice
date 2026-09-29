@@ -16,7 +16,7 @@ import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
-import se.jensen.johanna.fakestoreorderservice.exception.domain.InvalidOrderStateException;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.EmptyCartException;
 import se.jensen.johanna.fakestoreorderservice.exception.infra.InternalClientException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
@@ -47,7 +47,7 @@ public class OrderService {
     List<CheckoutCartItemDTO> cartItems = cartToCheckout.checkoutCart();
     if (cartItems == null || cartItems.isEmpty()) {
       log.debug("empty cart at checkout.");
-      throw new InvalidOrderStateException("No items to order. Please add products.");
+      throw new EmptyCartException("No items in cart. Please add products.");
     }
     log.debug("Checkout cart: {}", cartToCheckout);
     List<OrderItem> orderItems = cartItems.stream().map(orderItemMapper::toOrderItem).toList();

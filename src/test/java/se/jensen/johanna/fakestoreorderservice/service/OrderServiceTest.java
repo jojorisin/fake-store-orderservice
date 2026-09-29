@@ -24,7 +24,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.jwt.Jwt;
 import se.jensen.johanna.fakestoreorderservice.client.CartClient;
 import se.jensen.johanna.fakestoreorderservice.client.InventoryClient;
-import se.jensen.johanna.fakestoreorderservice.client.ProductClient;
 import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartItemDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartResponse;
@@ -44,8 +43,6 @@ class OrderServiceTest {
   private OrderRepository orderRepository;
   @Mock
   private PaymentProvider paymentProvider;
-  @Mock
-  private ProductClient productClient;
   @Mock
   private InventoryClient inventoryClient;
   @Spy
@@ -67,14 +64,16 @@ class OrderServiceTest {
 
   @Test
   void shouldSuccessfullyPutOrderAndSave() {
-    UUID userId = UUID.randomUUID();
+    UUID buyerId = UUID.randomUUID();
+    // products to order
     UUID productId1 = UUID.randomUUID();
     int quantity1 = 1;
     BigDecimal price1 = new BigDecimal("100.00");
     UUID productId2 = UUID.randomUUID();
     int quantity2 = 2;
     BigDecimal price2 = new BigDecimal("200.00");
-    BigDecimal expectedOrderSum = price1.add(price2.multiply(BigDecimal.valueOf(quantity2)));
+    BigDecimal expectedOrderSum = price1.multiply(BigDecimal.valueOf(quantity1))
+        .add(price2.multiply(BigDecimal.valueOf(quantity2)));
     AddressRequest addressRequest = getDefaultAddress();
     List<CheckoutCartItemDTO> cartItems = new ArrayList<>();
     cartItems.add(getCartItemDTO(productId1, quantity1, price1));
@@ -83,18 +82,18 @@ class OrderServiceTest {
     CheckoutResponse checkoutResponse = new CheckoutResponse("checkout url", "paymentreference");
 
     when(cartClient.getCartForCheckout()).thenReturn(checkoutCartResponse);
-    when(jwt.getSubject()).thenReturn(String.valueOf(userId));
+    when(jwt.getSubject()).thenReturn(String.valueOf(buyerId));
     when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
     when(paymentProvider.getPaymentType()).thenReturn(PaymentProviderType.STRIPE);
     when(paymentProvider.createCheckoutSession(any(Order.class), anyString())).thenReturn(
         checkoutResponse);
 
-    CheckoutResponse testResponse = orderService.putOrder(jwt, addressRequest);
+    orderService.putOrder(jwt, addressRequest);
 
     ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
     verify(orderRepository, times(1)).save(orderCaptor.capture());
     Order savedOrder = orderCaptor.getValue();
-    assertEquals(userId, savedOrder.getBuyerId());
+    assertEquals(buyerId, savedOrder.getBuyerId());
     assertEquals(cartItems.size(), savedOrder.getOrderItems().size());
     assertEquals(expectedOrderSum, savedOrder.getOrderSum());
   }
