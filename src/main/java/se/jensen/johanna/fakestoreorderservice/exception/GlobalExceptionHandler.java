@@ -66,7 +66,7 @@ public class GlobalExceptionHandler {
     log.error("Unexpected exception. path: {}", request.getRequestURI(), e);
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(new ErrorResponse(Instant.now(), HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            ErrorCode.INTERNAL_SERVER_ERROR, "Unable to process request. Please try again later.",
+            ErrorCode.INTERNAL_CLIENT_ERROR, "Unable to process request. Please try again later.",
             null));
   }
 
@@ -75,7 +75,7 @@ public class GlobalExceptionHandler {
     return switch (errorCode) {
       case INVALID_WEBHOOK, INVALID_ORDER_STATE, INVALID_INPUT -> HttpStatus.BAD_REQUEST;
       case PRODUCT_NOT_FOUND -> HttpStatus.NOT_FOUND;
-      case SERVICE_ERROR, INTERNAL_SERVER_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
+      case SERVICE_ERROR, INTERNAL_CLIENT_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
       case PAYMENT_PROVIDER_ERROR -> HttpStatus.BAD_GATEWAY;
     };
   }

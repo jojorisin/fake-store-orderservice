@@ -1,12 +1,12 @@
 package se.jensen.johanna.fakestoreorderservice.dto;
 
 import jakarta.validation.constraints.NotNull;
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 public record ReservationRequest(
     @NotNull
-    Set<CartItemRequest> cartItemRequests,
+    List<CartItemRequest> cartItemRequests,
     @NotNull
     UUID orderId
 ) {

@@ -32,7 +32,6 @@ import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProvider
 public class Order {
 
   @Id
-  //@GeneratedValue
   private UUID orderId;
 
   @NotNull
@@ -74,6 +73,9 @@ public class Order {
   }
 
   public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address) {
+    if (orderItems == null || orderItems.isEmpty()) {
+      throw new InvalidOrderStateException("Order items cant be null or empty.");
+    }
     Order order = Order.builder()
         .orderId(UUID.randomUUID())
         .buyerId(buyerId)

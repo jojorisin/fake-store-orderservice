@@ -4,13 +4,13 @@ import lombok.Getter;
 import se.jensen.johanna.fakestoreorderservice.exception.ErrorCode;
 
 @Getter
-public class InternalServiceException extends InfrastructureException {
+public class InternalClientException extends InfrastructureException {
 
-  public InternalServiceException(String message) {
+  public InternalClientException(String message) {
     super(message, ErrorCode.SERVICE_ERROR);
   }
 
-  public InternalServiceException(String message, Throwable cause) {
+  public InternalClientException(String message, Throwable cause) {
     super(message, ErrorCode.SERVICE_ERROR, cause);
   }
 }
