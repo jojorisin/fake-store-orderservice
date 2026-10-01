@@ -1,6 +1,7 @@
 package se.jensen.johanna.fakestoreorderservice.model;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,6 +14,7 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Currency;
 import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -49,6 +51,10 @@ public class Order {
   private BigDecimal orderSum;
 
   @NotNull
+  @Column(nullable = false, length = 3)
+  private Currency currency;
+
+  @NotNull
   @Enumerated(EnumType.STRING)
   private OrderStatus orderStatus;
 
@@ -72,7 +78,8 @@ public class Order {
     this.updatedAt = Instant.now();
   }
 
-  public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address) {
+  public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address,
+      Currency currency) {
     if (orderItems == null || orderItems.isEmpty()) {
       throw new InvalidOrderStateException("Order items cant be null or empty.");
     }
@@ -81,6 +88,7 @@ public class Order {
         .buyerId(buyerId)
         .orderItems(orderItems)
         .shippingAddress(address)
+        .currency(currency)
         .orderSum(calculateOrderSum(orderItems))
         .createdAt(Instant.now())
         .updatedAt(Instant.now())

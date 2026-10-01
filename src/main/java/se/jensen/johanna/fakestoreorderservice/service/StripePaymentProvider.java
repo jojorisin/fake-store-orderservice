@@ -11,6 +11,7 @@ import com.stripe.param.checkout.SessionCreateParams;
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Currency;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,8 +42,6 @@ public class StripePaymentProvider implements PaymentProvider {
   @Value("${stripe.webhook-secret}")
   private String stripeWebhookSecret;
 
-  @Value("${currency}")
-  private String currency;
 
   @PostConstruct
   public void init() {
@@ -65,7 +64,8 @@ public class StripePaymentProvider implements PaymentProvider {
   public CheckoutResponse createCheckoutSession(Order order, String email) {
     log.debug("Creating stripe checkout session...");
     log.debug("Creating line items for checkout. order id: {}", order.getOrderId());
-    List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems());
+    List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems(),
+        order.getCurrency());
     try {
       SessionCreateParams params = SessionCreateParams.builder()
           .setMode(SessionCreateParams.Mode.PAYMENT).setCustomerEmail(email)
@@ -81,13 +81,15 @@ public class StripePaymentProvider implements PaymentProvider {
 
   }
 
-  public List<SessionCreateParams.LineItem> createLineItems(List<OrderItem> orderItems) {
+  public List<SessionCreateParams.LineItem> createLineItems(List<OrderItem> orderItems,
+      Currency currency) {
     log.debug("Creating line items from order items: {}", orderItems);
     List<SessionCreateParams.LineItem> lineItems = new ArrayList<>();
     for (OrderItem item : orderItems) {
       SessionCreateParams.LineItem lineItem = SessionCreateParams.LineItem.builder()
           .setQuantity((long) item.getQuantity()).setPriceData(
-              SessionCreateParams.LineItem.PriceData.builder().setCurrency(currency).setUnitAmount(
+              SessionCreateParams.LineItem.PriceData.builder()
+                  .setCurrency(currency.getCurrencyCode()).setUnitAmount(
                       item.getPricePerItem().multiply(BigDecimal.valueOf(100)).longValue())
                   .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
                       .setName(item.getTitle()).build()).build()).build();
