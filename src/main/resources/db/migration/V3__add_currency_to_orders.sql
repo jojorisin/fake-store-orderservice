@@ -1,0 +1,4 @@
+ALTER TABLE orders
+    ADD COLUMN currency CHAR(3) DEFAULT 'USD' NOT NULL;
+ALTER TABLE orders
+    ALTER COLUMN currency DROP DEFAULT;

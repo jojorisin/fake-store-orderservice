@@ -1,5 +1,6 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
+import java.util.Currency;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class OrderService {
 
   public CheckoutResponse putOrder(Jwt jwt, AddressRequest addressRequest) {
     log.debug("fetching cart for order...");
+    // TODO add cart gateway service
     CheckoutCartResponse cartToCheckout = cartClient.getCartForCheckout();
     List<CheckoutCartItemDTO> cartItems = cartToCheckout.checkoutCart();
     if (cartItems == null || cartItems.isEmpty()) {
@@ -53,8 +55,10 @@ public class OrderService {
     List<OrderItem> orderItems = cartItems.stream().map(orderItemMapper::toOrderItem).toList();
     ShippingAddress address = addressMapper.toShippingAddress(addressRequest);
 
-    // create pending order
-    Order order = Order.create(UUID.fromString(jwt.getSubject()), orderItems, address);
+    // create pending order.
+    // TODO fetch currency dynamically from cart
+    Currency currency = getCurrency(null);
+    Order order = Order.create(UUID.fromString(jwt.getSubject()), orderItems, address, currency);
     UUID orderId = order.getOrderId();
 
     // create checkout session with payment provider
@@ -75,12 +79,20 @@ public class OrderService {
     return checkoutResponse;
   }
 
+  private Currency getCurrency(String chosenCurrency) {
+    if (chosenCurrency == null || chosenCurrency.isBlank()) {
+      return Currency.getInstance("USD");
+    }
+    return Currency.getInstance(chosenCurrency.trim().toUpperCase());
+  }
+
 
   /**
    * Sends reservation request to inventory
    *
    * @param reservationRequest Set of product id-quantity and order id to track reservation
    */
+  //TODO create inventory gateway service
   public void reserveCart(ReservationRequest reservationRequest) {
     log.debug("Reserving cart {} for order {}...", reservationRequest.cartItemRequests(),
         reservationRequest.orderId());
