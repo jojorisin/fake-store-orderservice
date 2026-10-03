@@ -1,7 +1,7 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
-import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
+import se.jensen.johanna.fakestoreorderservice.dto.event.PaymentWebhookEvent;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 

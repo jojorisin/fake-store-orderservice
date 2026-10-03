@@ -1,5 +1,5 @@
 package se.jensen.johanna.fakestoreorderservice.service.constants;
 
-public enum PaymentEventType {
+public enum PaymentStatus {
   PAID, CANCELLED
 }
