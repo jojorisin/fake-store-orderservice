@@ -63,7 +63,6 @@ public class Order {
   @Enumerated(EnumType.STRING)
   private PaymentProviderType paymentType;
 
-
   private Instant createdAt;
 
   private Instant updatedAt;
@@ -97,7 +96,6 @@ public class Order {
     order.orderItems.forEach(item -> item.giveParent(order));
 
     return order;
-
   }
 
   private static BigDecimal calculateOrderSum(List<OrderItem> orderItems) {
@@ -110,11 +108,19 @@ public class Order {
     this.paymentType = paymentType;
   }
 
+  public void updatePaymentReference(String paymentReference) {
+    if (orderStatus != OrderStatus.PENDING) {
+      throw new InvalidOrderStateException(
+          "Payment reference can't be updated if order is not PENDING.");
+    }
+    this.paymentReference = paymentReference;
+  }
+
   public void confirmPaidOrder() {
-    if (!this.orderStatus.equals(OrderStatus.PENDING)) {
+    if (!orderStatus.equals(OrderStatus.PENDING)) {
       throw new InvalidOrderStateException("Order is already paid");
     }
-    this.orderStatus = OrderStatus.PAID;
+    orderStatus = OrderStatus.PAID;
   }
 
 

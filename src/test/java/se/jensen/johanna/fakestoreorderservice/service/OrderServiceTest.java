@@ -22,8 +22,6 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.jwt.Jwt;
-import se.jensen.johanna.fakestoreorderservice.client.CartClient;
-import se.jensen.johanna.fakestoreorderservice.client.InventoryClient;
 import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartItemDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartResponse;
@@ -41,16 +39,18 @@ class OrderServiceTest {
   private OrderService orderService;
   @Mock
   private OrderRepository orderRepository;
+
   @Mock
-  private PaymentProvider paymentProvider;
+  private InventoryGateway inventoryGateway;
   @Mock
-  private InventoryClient inventoryClient;
+  private CartGateway cartGateway;
   @Spy
   private OrderItemMapper orderItemMapper = Mappers.getMapper(OrderItemMapper.class);
   @Spy
   private final AddressMapper addressMapper = Mappers.getMapper(AddressMapper.class);
+
   @Mock
-  private CartClient cartClient;
+  private PaymentService paymentService;
 
   private Jwt jwt;
 
@@ -58,8 +58,6 @@ class OrderServiceTest {
   @BeforeEach
   void setUp() {
     jwt = mock(Jwt.class);
-
-
   }
 
   @Test
@@ -79,13 +77,13 @@ class OrderServiceTest {
     cartItems.add(getCartItemDTO(productId1, quantity1, price1));
     cartItems.add(getCartItemDTO(productId2, quantity2, price2));
     CheckoutCartResponse checkoutCartResponse = new CheckoutCartResponse(cartItems);
-    CheckoutResponse checkoutResponse = new CheckoutResponse("checkout url", "paymentreference");
+    CheckoutResponse checkoutResponse = new CheckoutResponse("checkout url", "paymentreference",
+        PaymentProviderType.STRIPE);
 
-    when(cartClient.getCartForCheckout()).thenReturn(checkoutCartResponse);
+    when(cartGateway.getCartForCheckout()).thenReturn(checkoutCartResponse);
     when(jwt.getSubject()).thenReturn(String.valueOf(buyerId));
     when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
-    when(paymentProvider.getPaymentType()).thenReturn(PaymentProviderType.STRIPE);
-    when(paymentProvider.createCheckoutSession(any(Order.class), anyString())).thenReturn(
+    when(paymentService.createCheckoutSession(any(Order.class), anyString())).thenReturn(
         checkoutResponse);
 
     orderService.putOrder(jwt, addressRequest);

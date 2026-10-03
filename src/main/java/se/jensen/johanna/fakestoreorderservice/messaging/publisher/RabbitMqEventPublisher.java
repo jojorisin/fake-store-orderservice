@@ -1,4 +1,4 @@
-package se.jensen.johanna.fakestoreorderservice.messaging;
+package se.jensen.johanna.fakestoreorderservice.messaging.publisher;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ public class RabbitMqEventPublisher implements OrderEventPublisher {
   private static final String ORDER_PAID_ROUTING_KEY = "order.paid";
 
   @Override
-  public void publishConfirmReservationEvent(UUID orderId) {
+  public void publishOrderPaidEvent(UUID orderId) {
     log.debug("Publishing order paid event for order: {}...", orderId);
 
     rabbitTemplate.convertAndSend(orderExchange, ORDER_PAID_ROUTING_KEY, orderId);

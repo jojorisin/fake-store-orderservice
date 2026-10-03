@@ -26,9 +26,7 @@ public class GlobalExceptionHandler {
     if (e.getErrorCode() == ErrorCode.INVALID_ORDER_STATE) {
       log.error("Invalid order state. path: {}", request.getRequestURI(), e);
     }
-    if (e.getErrorCode() == ErrorCode.PRODUCT_NOT_FOUND) {
-      log.warn("Product not found: {}, path: {}", e.getMessage(), request.getRequestURI());
-    }
+
     return ResponseEntity.status(status).body(new ErrorResponse(
         Instant.now(), status.value(), e.getErrorCode(), e.getMessage(), null
     ));
@@ -75,7 +73,7 @@ public class GlobalExceptionHandler {
     return switch (errorCode) {
       case INVALID_WEBHOOK, INVALID_ORDER_STATE, INVALID_INPUT, EMPTY_CART ->
           HttpStatus.BAD_REQUEST;
-      case PRODUCT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+      case ORDER_NOT_FOUND -> HttpStatus.NOT_FOUND;
       case SERVICE_ERROR, INTERNAL_CLIENT_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
       case PAYMENT_PROVIDER_ERROR -> HttpStatus.BAD_GATEWAY;
     };

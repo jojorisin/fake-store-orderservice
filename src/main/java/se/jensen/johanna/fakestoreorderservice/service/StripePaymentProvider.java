@@ -18,13 +18,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
-import se.jensen.johanna.fakestoreorderservice.dto.PaymentWebhookEvent;
+import se.jensen.johanna.fakestoreorderservice.dto.event.PaymentWebhookEvent;
 import se.jensen.johanna.fakestoreorderservice.exception.infra.InvalidPaymentWebhookException;
 import se.jensen.johanna.fakestoreorderservice.exception.infra.PaymentProviderException;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
-import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentEventType;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
+import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentStatus;
 
 @Component
 @Slf4j
@@ -63,7 +63,6 @@ public class StripePaymentProvider implements PaymentProvider {
   @Transactional
   public CheckoutResponse createCheckoutSession(Order order, String email) {
     log.debug("Creating stripe checkout session...");
-    log.debug("Creating line items for checkout. order id: {}", order.getOrderId());
     List<SessionCreateParams.LineItem> lineItems = createLineItems(order.getOrderItems(),
         order.getCurrency());
     try {
@@ -74,7 +73,7 @@ public class StripePaymentProvider implements PaymentProvider {
           .addAllLineItem(lineItems)
           .putMetadata("orderId", order.getOrderId().toString()).build();
       Session session = Session.create(params);
-      return new CheckoutResponse(session.getUrl(), session.getId());
+      return new CheckoutResponse(session.getUrl(), session.getId(), getPaymentType());
     } catch (StripeException e) {
       throw new PaymentProviderException("Unable to process payment.", e);
     }
@@ -114,7 +113,7 @@ public class StripePaymentProvider implements PaymentProvider {
     }
     Session session;
     String orderId;
-    PaymentEventType eventType;
+    PaymentStatus paymentStatus;
     switch (event.getType()) {
       case "checkout.session.completed":
         session = (Session) event.getDataObjectDeserializer().getObject()
@@ -134,9 +133,9 @@ public class StripePaymentProvider implements PaymentProvider {
         if (orderId == null || orderId.isBlank()) {
           throw new InvalidPaymentWebhookException("Order id is missing from metadata.");
         }
-        eventType = "paid".equals(session.getPaymentStatus()) ? PaymentEventType.PAID
-            : PaymentEventType.CANCELLED;
-        return new PaymentWebhookEvent(eventType, orderId, session.getId());
+        paymentStatus = "paid".equals(session.getPaymentStatus()) ? PaymentStatus.PAID
+            : PaymentStatus.CANCELLED;
+        return new PaymentWebhookEvent(paymentStatus, orderId, session.getId());
       default:
         log.debug("Unsupported event type. Returning null for event type {}", event.getType());
         return null;

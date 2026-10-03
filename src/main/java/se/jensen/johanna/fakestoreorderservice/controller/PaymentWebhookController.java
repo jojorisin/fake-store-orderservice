@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import se.jensen.johanna.fakestoreorderservice.service.OrderService;
+import se.jensen.johanna.fakestoreorderservice.service.PaymentService;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
 @RestController
@@ -16,14 +16,14 @@ import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProvider
 @RequiredArgsConstructor
 public class PaymentWebhookController {
 
-  private final OrderService orderService;
+  private final PaymentService paymentService;
 
 
   @PostMapping("/stripe-webhook")
   public ResponseEntity<Void> handleWebhook(@RequestBody byte[] payload,
       @RequestHeader("Stripe-Signature") String signature) {
     String payloadString = new String(payload, StandardCharsets.UTF_8);
-    orderService.handlePaymentWebhook(PaymentProviderType.STRIPE, payloadString, signature);
+    paymentService.handlePaymentWebhook(PaymentProviderType.STRIPE, payloadString, signature);
     return ResponseEntity.ok().build();
   }
 
