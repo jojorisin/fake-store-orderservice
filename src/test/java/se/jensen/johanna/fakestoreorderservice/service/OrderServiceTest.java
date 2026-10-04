@@ -1,6 +1,7 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -9,8 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
+import java.util.Currency;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,14 +23,20 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.oauth2.jwt.Jwt;
 import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartItemDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutCartResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
+import se.jensen.johanna.fakestoreorderservice.dto.event.OrderConfirmedPaidEvent;
+import se.jensen.johanna.fakestoreorderservice.exception.domain.InvalidOrderStateException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
+import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
+import se.jensen.johanna.fakestoreorderservice.model.OrderStatus;
+import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
 import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
 import se.jensen.johanna.fakestoreorderservice.service.constants.PaymentProviderType;
 
@@ -48,9 +56,10 @@ class OrderServiceTest {
   private OrderItemMapper orderItemMapper = Mappers.getMapper(OrderItemMapper.class);
   @Spy
   private final AddressMapper addressMapper = Mappers.getMapper(AddressMapper.class);
-
   @Mock
   private PaymentService paymentService;
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
 
   private Jwt jwt;
 
@@ -63,19 +72,9 @@ class OrderServiceTest {
   @Test
   void shouldSuccessfullyPutOrderAndSave() {
     UUID buyerId = UUID.randomUUID();
-    // products to order
-    UUID productId1 = UUID.randomUUID();
-    int quantity1 = 1;
-    BigDecimal price1 = new BigDecimal("100.00");
-    UUID productId2 = UUID.randomUUID();
-    int quantity2 = 2;
-    BigDecimal price2 = new BigDecimal("200.00");
-    BigDecimal expectedOrderSum = price1.multiply(BigDecimal.valueOf(quantity1))
-        .add(price2.multiply(BigDecimal.valueOf(quantity2)));
     AddressRequest addressRequest = getDefaultAddress();
-    List<CheckoutCartItemDTO> cartItems = new ArrayList<>();
-    cartItems.add(getCartItemDTO(productId1, quantity1, price1));
-    cartItems.add(getCartItemDTO(productId2, quantity2, price2));
+    List<CheckoutCartItemDTO> cartItems = getDefaultCheckoutCartItems();
+    BigDecimal cartSum = calculateCartSum(cartItems);
     CheckoutCartResponse checkoutCartResponse = new CheckoutCartResponse(cartItems);
     CheckoutResponse checkoutResponse = new CheckoutResponse("checkout url", "paymentreference",
         PaymentProviderType.STRIPE);
@@ -93,7 +92,72 @@ class OrderServiceTest {
     Order savedOrder = orderCaptor.getValue();
     assertEquals(buyerId, savedOrder.getBuyerId());
     assertEquals(cartItems.size(), savedOrder.getOrderItems().size());
-    assertEquals(expectedOrderSum, savedOrder.getOrderSum());
+    assertEquals(cartSum, savedOrder.getOrderSum());
+  }
+
+  @Test
+  void handlePaidOrder_shouldSuccessfullyMarkOrderAsPaidAndPublishEvent() {
+    String paymentReference = "1234";
+    Order order = getDefaultOrder();
+    order.assignPaymentReferences(paymentReference, PaymentProviderType.STRIPE);
+    UUID orderId = order.getOrderId();
+
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    orderService.handlePaidOrder(paymentReference, orderId);
+
+    assertEquals(OrderStatus.PAID, order.getOrderStatus());
+    ArgumentCaptor<OrderConfirmedPaidEvent> captor = ArgumentCaptor.forClass(
+        OrderConfirmedPaidEvent.class);
+    verify(eventPublisher, times(1)).publishEvent(captor.capture());
+    OrderConfirmedPaidEvent orderConfirmedPaidEvent = captor.getValue();
+    assertEquals(order.getOrderId(), orderConfirmedPaidEvent.orderId());
+  }
+
+  @Test
+  void handlePaidOrder_shouldThrowWhenOrderIsAlreadyMarkedAsPaid() {
+    String savedPaymentReference = "1234";
+    Order order = getDefaultOrder();
+    UUID orderId = order.getOrderId();
+    order.assignPaymentReferences(savedPaymentReference, PaymentProviderType.STRIPE);
+    order.confirmPaidOrder();
+    // incoming payment reference from webhook
+    String webhookReference = "5678";
+
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    assertThrows(InvalidOrderStateException.class,
+        () -> orderService.handlePaidOrder(webhookReference, orderId));
+  }
+
+  @Test
+  void handlePaidOrder_shouldUpdatePaymentReferenceWhenMisMatch() {
+    String savedPaymentReference = "1234";
+    Order order = getDefaultOrder();
+    UUID orderId = order.getOrderId();
+    order.assignPaymentReferences(savedPaymentReference, PaymentProviderType.STRIPE);
+    String webhookReference = "5678";
+
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    orderService.handlePaidOrder(webhookReference, orderId);
+
+    assertEquals(webhookReference, order.getPaymentReference());
+    assertEquals(OrderStatus.PAID, order.getOrderStatus());
+  }
+
+  @Test
+  void handlePaidOrder_shouldUpdatePaymentReferenceWhenPaymentReferenceIsNull() {
+    Order order = getDefaultOrder();
+    UUID orderId = order.getOrderId();
+    String webhookReference = "5678";
+
+    when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+    orderService.handlePaidOrder(webhookReference, orderId);
+
+    assertEquals(webhookReference, order.getPaymentReference());
+    assertEquals(OrderStatus.PAID, order.getOrderStatus());
   }
 
   private AddressRequest getDefaultAddress() {
@@ -101,9 +165,31 @@ class OrderServiceTest {
         "streetName2", "12345", "city", "country");
   }
 
-  private CheckoutCartItemDTO getCartItemDTO(UUID productId, int quantity,
-      BigDecimal pricePerItem) {
-    return new CheckoutCartItemDTO(productId, quantity, pricePerItem, "title");
+  private ShippingAddress getDefaultShippingAddress() {
+    return ShippingAddress.create("firstName", "lastName", "co", "streetName",
+        "streetName2", "12345", "city", "country");
+  }
+
+  private List<CheckoutCartItemDTO> getDefaultCheckoutCartItems() {
+    return List.of(
+        new CheckoutCartItemDTO(UUID.randomUUID(), 1, BigDecimal.valueOf(100.00), "title"),
+        new CheckoutCartItemDTO(UUID.randomUUID(), 1, BigDecimal.valueOf(200.00), "title2"));
+  }
+
+  private List<OrderItem> getDefaultOrderItems() {
+    return List.of(OrderItem.create(UUID.randomUUID(), "title", BigDecimal.valueOf(100.00), 1),
+        OrderItem.create(UUID.randomUUID(), "title2", BigDecimal.valueOf(200.00), 3));
+  }
+
+  private BigDecimal calculateCartSum(List<CheckoutCartItemDTO> items) {
+    return items.stream()
+        .map(item -> item.pricePerItem().multiply(BigDecimal.valueOf(item.quantity())))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private Order getDefaultOrder() {
+    return Order.create(UUID.randomUUID(), getDefaultOrderItems(), getDefaultShippingAddress(),
+        Currency.getInstance("USD"));
   }
 
 
